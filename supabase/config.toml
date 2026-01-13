@@ -1,1 +1,10 @@
 project_id = "hxwarwqxctgafjpothjn"
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.parse-food]
+verify_jwt = false
+
+[functions.parse-exercise]
+verify_jwt = false

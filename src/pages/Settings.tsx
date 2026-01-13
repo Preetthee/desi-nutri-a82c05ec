@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
+import AIProviderSettings from '@/components/settings/AIProviderSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,9 @@ interface Profile {
   allergies: string[] | null;
   disliked_foods: string[] | null;
   avatar_url: string | null;
+  ai_provider: string | null;
+  custom_api_key: string | null;
+  custom_api_endpoint: string | null;
 }
 
 export default function Settings() {
@@ -244,6 +248,17 @@ export default function Settings() {
             </Card>
           </div>
         ))}
+
+        {/* AI Provider Settings */}
+        <div className="animate-slide-up" style={{ animationDelay: '300ms' }}>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2 px-1">AI Configuration</h3>
+          <AIProviderSettings
+            currentProvider={profile?.ai_provider || 'lovable_ai'}
+            customApiKey={profile?.custom_api_key || null}
+            customEndpoint={profile?.custom_api_endpoint || null}
+            onSaved={fetchProfile}
+          />
+        </div>
 
         {/* Logout Button */}
         <Button

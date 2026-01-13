@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
+import AIFoodInput from '@/components/tracker/AIFoodInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -177,6 +178,9 @@ export default function Tracker() {
           </h1>
           <p className="text-muted-foreground mt-1">{t('common.today')}</p>
         </div>
+
+        {/* AI Food Input */}
+        <AIFoodInput onFoodAdded={fetchLogs} />
 
         {/* Water Intake Card */}
         <Card className="animate-slide-up border-0 shadow-lg bg-gradient-to-br from-blue-500/5 to-blue-600/10">

@@ -107,9 +107,12 @@ export type Database = {
       profiles: {
         Row: {
           age: number | null
+          ai_provider: string | null
           allergies: string[] | null
           avatar_url: string | null
           created_at: string
+          custom_api_endpoint: string | null
+          custom_api_key: string | null
           dietary_restrictions: string[] | null
           disliked_foods: string[] | null
           fitness_goal: string | null
@@ -125,9 +128,12 @@ export type Database = {
         }
         Insert: {
           age?: number | null
+          ai_provider?: string | null
           allergies?: string[] | null
           avatar_url?: string | null
           created_at?: string
+          custom_api_endpoint?: string | null
+          custom_api_key?: string | null
           dietary_restrictions?: string[] | null
           disliked_foods?: string[] | null
           fitness_goal?: string | null
@@ -143,9 +149,12 @@ export type Database = {
         }
         Update: {
           age?: number | null
+          ai_provider?: string | null
           allergies?: string[] | null
           avatar_url?: string | null
           created_at?: string
+          custom_api_endpoint?: string | null
+          custom_api_key?: string | null
           dietary_restrictions?: string[] | null
           disliked_foods?: string[] | null
           fitness_goal?: string | null
