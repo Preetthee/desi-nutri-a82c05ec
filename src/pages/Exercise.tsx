@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
+import AIExerciseInput from '@/components/exercise/AIExerciseInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -238,8 +239,11 @@ export default function Exercise() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
+        </Dialog>
         </div>
+
+        {/* AI Exercise Input */}
+        <AIExerciseInput onExerciseAdded={fetchLogs} />
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-4 animate-slide-up">
