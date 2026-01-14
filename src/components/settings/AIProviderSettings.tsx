@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,8 @@ import {
   Check,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  ShieldCheck
 } from 'lucide-react';
 
 interface AIProviderSettingsProps {
@@ -28,18 +28,33 @@ interface AIProviderSettingsProps {
 
 export default function AIProviderSettings({
   currentProvider,
-  customApiKey,
-  customEndpoint,
+  customEndpoint: initialEndpoint,
   onSaved,
 }: AIProviderSettingsProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
   const [provider, setProvider] = useState(currentProvider || 'lovable_ai');
-  const [apiKey, setApiKey] = useState(customApiKey || '');
-  const [endpoint, setEndpoint] = useState(customEndpoint || '');
+  const [apiKey, setApiKey] = useState('');
+  const [endpoint, setEndpoint] = useState(initialEndpoint || '');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [hasExistingKey, setHasExistingKey] = useState(false);
+
+  // Check if user has an existing key stored in vault
+  useState(() => {
+    if (user && (currentProvider === 'openai' || currentProvider === 'custom')) {
+      // We can't read the key, but we can check if one exists by checking user_api_keys
+      supabase
+        .from('user_api_keys')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('provider', currentProvider)
+        .maybeSingle()
+        .then(({ data }) => {
+          setHasExistingKey(!!data);
+        });
+    }
+  });
 
   const providers = [
     {
@@ -63,35 +78,66 @@ export default function AIProviderSettings({
     if (!user) return;
 
     // Validation
-    if (provider === 'openai' && !apiKey.trim()) {
+    if (provider === 'openai' && !apiKey.trim() && !hasExistingKey) {
       toast.error('Please enter your OpenAI API key');
       return;
     }
 
-    if (provider === 'custom' && (!apiKey.trim() || !endpoint.trim())) {
-      toast.error('Please enter both API key and endpoint for custom provider');
+    if (provider === 'custom' && !endpoint.trim()) {
+      toast.error('Please enter the API endpoint for custom provider');
+      return;
+    }
+
+    if (provider === 'custom' && !apiKey.trim() && !hasExistingKey) {
+      toast.error('Please enter an API key for custom provider');
       return;
     }
 
     setSaving(true);
 
     try {
+      // Store API key in vault if provided
+      if (apiKey.trim() && provider !== 'lovable_ai') {
+        const { error: vaultError } = await supabase.rpc('store_user_api_key', {
+          p_provider: provider,
+          p_api_key: apiKey.trim()
+        });
+
+        if (vaultError) {
+          console.error('Vault storage error:', vaultError);
+          throw new Error('Failed to securely store API key');
+        }
+        
+        setHasExistingKey(true);
+        setApiKey(''); // Clear the input after successful storage
+      }
+
+      // If switching to lovable_ai, delete any existing vault keys
+      if (provider === 'lovable_ai') {
+        // Delete openai key if exists
+        await supabase.rpc('delete_user_api_key', { p_provider: 'openai' });
+        // Delete custom key if exists
+        await supabase.rpc('delete_user_api_key', { p_provider: 'custom' });
+      }
+
+      // Update profile with provider selection and endpoint (not the key)
       const { error } = await supabase
         .from('profiles')
         .update({
           ai_provider: provider,
-          custom_api_key: provider !== 'lovable_ai' ? apiKey : null,
           custom_api_endpoint: provider === 'custom' ? endpoint : null,
+          // Clear the deprecated columns
+          custom_api_key: null,
         })
         .eq('user_id', user.id);
 
       if (error) throw error;
 
-      toast.success('AI provider settings saved');
+      toast.success('AI provider settings saved securely');
       onSaved();
     } catch (error) {
       console.error('Save error:', error);
-      toast.error('Failed to save settings');
+      toast.error(error instanceof Error ? error.message : 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -101,14 +147,15 @@ export default function AIProviderSettings({
     setTesting(true);
 
     try {
-      // Test by making a simple request to the AI chat endpoint
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
             messages: [{ role: 'user', content: 'Hello, this is a test.' }],
@@ -130,6 +177,14 @@ export default function AIProviderSettings({
     }
   };
 
+  const handleProviderChange = (newProvider: string) => {
+    setProvider(newProvider);
+    // Reset the existing key flag when changing providers
+    if (newProvider !== currentProvider) {
+      setHasExistingKey(false);
+    }
+  };
+
   return (
     <Card className="border-0 shadow-lg">
       <CardHeader>
@@ -142,7 +197,7 @@ export default function AIProviderSettings({
         {/* Provider Selection */}
         <div className="space-y-2">
           <Label>AI Provider</Label>
-          <Select value={provider} onValueChange={setProvider}>
+          <Select value={provider} onValueChange={handleProviderChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -167,13 +222,19 @@ export default function AIProviderSettings({
             <Label className="flex items-center gap-2">
               <Key className="w-4 h-4" />
               API Key
+              {hasExistingKey && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  Securely stored
+                </span>
+              )}
             </Label>
             <div className="relative">
               <Input
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={provider === 'openai' ? 'sk-...' : 'Your API key'}
+                placeholder={hasExistingKey ? '••••••••••••••••' : (provider === 'openai' ? 'sk-...' : 'Your API key')}
                 className="pr-10"
               />
               <Button
@@ -190,6 +251,11 @@ export default function AIProviderSettings({
                 )}
               </Button>
             </div>
+            {hasExistingKey && (
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep your existing key, or enter a new one to replace it.
+              </p>
+            )}
           </div>
         )}
 
@@ -214,10 +280,11 @@ export default function AIProviderSettings({
 
         {/* Security Note */}
         {provider !== 'lovable_ai' && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-golden/10 border border-golden/30">
-            <AlertCircle className="w-4 h-4 text-golden mt-0.5 shrink-0" />
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+            <ShieldCheck className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Your API key is stored securely and only used for AI requests. We never share or log your key.
+              Your API key is encrypted and stored securely using Supabase Vault. 
+              It's never stored in plaintext and can only be accessed by our secure backend functions.
             </p>
           </div>
         )}
