@@ -119,12 +119,7 @@ export default function FoodDoctor() {
     
     setLoadingMeal(mealType);
     try {
-      const response = await fetchAI(`Suggest a ${mealType} meal for someone with:
-- Fitness goal: ${profile.fitness_goal || 'general health'}
-- Allergies: ${profile.allergies?.join(', ') || 'none'}
-- Dietary restrictions: ${profile.dietary_restrictions?.join(', ') || 'none'}
-
-Give 2-3 specific meal options with brief descriptions. Keep it short and practical. Focus on South Asian cuisine if relevant.`);
+      const response = await fetchAI(`Suggest 2 simple ${mealType} options for ${profile.fitness_goal || 'general health'}. Allergies: ${profile.allergies?.join(', ') || 'none'}. One line each, no long descriptions.`);
       
       setMealPlan(prev => ({ ...prev, [mealType]: response }));
     } catch (error) {
@@ -139,11 +134,7 @@ Give 2-3 specific meal options with brief descriptions. Keep it short and practi
     
     setLoadingRecommended(true);
     try {
-      const response = await fetchAI(`List 6-8 recommended foods for someone with:
-- Fitness goal: ${profile.fitness_goal || 'general health'}
-- Health conditions: ${profile.health_conditions?.join(', ') || 'none'}
-
-Just list the foods with one-line benefits. Focus on locally available options.`);
+      const response = await fetchAI(`List only 3 recommended foods for ${profile.fitness_goal || 'general health'}. One line each with brief benefit.`);
       
       setRecommendedFoods(response);
     } catch (error) {
@@ -158,10 +149,7 @@ Just list the foods with one-line benefits. Focus on locally available options.`
     
     setLoadingBudget(true);
     try {
-      const response = await fetchAI(`List 6-8 budget-friendly healthy foods for someone with:
-- Fitness goal: ${profile.fitness_goal || 'general health'}
-
-Focus on affordable, nutritious options available in South Asia. Just list with brief benefits.`);
+      const response = await fetchAI(`List only 3 budget-friendly healthy foods. One line each with cost benefit. Keep it very short.`);
       
       setBudgetFoods(response);
     } catch (error) {
@@ -180,13 +168,7 @@ Focus on affordable, nutritious options available in South Asia. Just list with 
         ? profile.weight_kg / Math.pow(profile.height_cm / 100, 2)
         : null;
         
-      const response = await fetchAI(`List 5-7 foods to AVOID for someone with:
-- BMI: ${bmi?.toFixed(1) || 'unknown'}
-- Fitness goal: ${profile.fitness_goal || 'general health'}
-- Health conditions: ${profile.health_conditions?.join(', ') || 'none'}
-- Allergies: ${profile.allergies?.join(', ') || 'none'}
-
-Just list the foods with brief reason why to avoid. Be specific.`);
+      const response = await fetchAI(`List only 3 foods to AVOID for BMI ${bmi?.toFixed(1) || 'unknown'}, ${profile.health_conditions?.join(', ') || 'no conditions'}. One line each with brief reason.`);
       
       setAvoidFoods(response);
     } catch (error) {
