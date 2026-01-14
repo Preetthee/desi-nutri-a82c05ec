@@ -45,6 +45,28 @@ interface DailySummary {
   fat: number;
 }
 
+const CACHE_KEY = 'food_doctor_cache';
+
+function getCachedData(userId: string) {
+  try {
+    const cached = localStorage.getItem(`${CACHE_KEY}_${userId}`);
+    if (!cached) return null;
+    const { data, date } = JSON.parse(cached);
+    const today = new Date().toDateString();
+    if (date === today) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData(userId: string, data: { mealPlan: Record<string, string>, recommended: string | null, budget: string | null, avoid: string | null }) {
+  localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
+    data,
+    date: new Date().toDateString()
+  }));
+}
+
 export default function FoodDoctor() {
   const { t } = useLanguage();
   const { user, session } = useAuth();
@@ -61,6 +83,7 @@ export default function FoodDoctor() {
   const [loadingBudget, setLoadingBudget] = useState(false);
   const [avoidFoods, setAvoidFoods] = useState<string | null>(null);
   const [loadingAvoid, setLoadingAvoid] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   // Goals based on common recommendations
   const goals = {
@@ -80,6 +103,35 @@ export default function FoodDoctor() {
   useEffect(() => {
     fetchData();
   }, [user]);
+
+  // Auto-generate all content when profile is loaded (with caching)
+  useEffect(() => {
+    if (profile && session && user && !initialLoadDone) {
+      const cached = getCachedData(user.id);
+      if (cached) {
+        setMealPlan(cached.mealPlan || {});
+        setRecommendedFoods(cached.recommended);
+        setBudgetFoods(cached.budget);
+        setAvoidFoods(cached.avoid);
+        setInitialLoadDone(true);
+      } else {
+        generateAll();
+        setInitialLoadDone(true);
+      }
+    }
+  }, [profile, session, user, initialLoadDone]);
+
+  // Save to cache whenever data changes
+  useEffect(() => {
+    if (user && initialLoadDone && (Object.keys(mealPlan).length > 0 || recommendedFoods || budgetFoods || avoidFoods)) {
+      setCachedData(user.id, {
+        mealPlan,
+        recommended: recommendedFoods,
+        budget: budgetFoods,
+        avoid: avoidFoods
+      });
+    }
+  }, [mealPlan, recommendedFoods, budgetFoods, avoidFoods, user, initialLoadDone]);
 
   async function fetchData() {
     if (!user) return;
@@ -112,6 +164,16 @@ export default function FoodDoctor() {
     }
     
     setLoading(false);
+  }
+
+  async function generateAll() {
+    // Generate all sections in parallel
+    await Promise.all([
+      generateMealSuggestion('breakfast'),
+      generateRecommendedFoods(),
+      generateBudgetFoods(),
+      generateAvoidFoods()
+    ]);
   }
 
   async function generateMealSuggestion(mealType: string) {
@@ -312,37 +374,25 @@ export default function FoodDoctor() {
               {mealTabs.map((tab) => (
                 <TabsContent key={tab.id} value={tab.id} className="mt-4">
                   {mealPlan[tab.id] ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <p className="text-sm text-foreground whitespace-pre-wrap">{mealPlan[tab.id]}</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => generateMealSuggestion(tab.id)}
-                        disabled={loadingMeal === tab.id}
-                      >
-                        <RefreshCw className={`w-3 h-3 mr-1 ${loadingMeal === tab.id ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </Button>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => generateMealSuggestion(tab.id)}
+                          disabled={loadingMeal === tab.id}
+                          className="h-7 w-7"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${loadingMeal === tab.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <Button
-                      onClick={() => generateMealSuggestion(tab.id)}
-                      disabled={loadingMeal === tab.id}
-                      className="w-full"
-                      variant="outline"
-                    >
-                      {loadingMeal === tab.id ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Get {tab.label} Ideas
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating {tab.label.toLowerCase()} ideas...
+                    </div>
                   )}
                 </TabsContent>
               ))}
@@ -358,41 +408,25 @@ export default function FoodDoctor() {
                 <Apple className="w-5 h-5 text-primary" />
                 Recommended Foods
               </CardTitle>
-              {recommendedFoods && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={generateRecommendedFoods}
-                  disabled={loadingRecommended}
-                  className="h-8 w-8"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingRecommended ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={generateRecommendedFoods}
+                disabled={loadingRecommended}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingRecommended ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
             {recommendedFoods ? (
               <p className="text-sm text-foreground whitespace-pre-wrap">{recommendedFoods}</p>
             ) : (
-              <Button
-                onClick={generateRecommendedFoods}
-                disabled={loadingRecommended}
-                className="w-full"
-                variant="outline"
-              >
-                {loadingRecommended ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Get Recommendations
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Getting recommendations...
+              </div>
             )}
           </CardContent>
         </Card>
@@ -405,41 +439,25 @@ export default function FoodDoctor() {
                 <Wallet className="w-5 h-5 text-golden" />
                 Budget-Friendly Foods
               </CardTitle>
-              {budgetFoods && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={generateBudgetFoods}
-                  disabled={loadingBudget}
-                  className="h-8 w-8"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingBudget ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={generateBudgetFoods}
+                disabled={loadingBudget}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingBudget ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
             {budgetFoods ? (
               <p className="text-sm text-foreground whitespace-pre-wrap">{budgetFoods}</p>
             ) : (
-              <Button
-                onClick={generateBudgetFoods}
-                disabled={loadingBudget}
-                className="w-full"
-                variant="outline"
-              >
-                {loadingBudget ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Get Budget Options
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Getting budget options...
+              </div>
             )}
           </CardContent>
         </Card>
@@ -452,41 +470,25 @@ export default function FoodDoctor() {
                 <Ban className="w-5 h-5 text-terracotta" />
                 Foods to Avoid
               </CardTitle>
-              {avoidFoods && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={generateAvoidFoods}
-                  disabled={loadingAvoid}
-                  className="h-8 w-8"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingAvoid ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={generateAvoidFoods}
+                disabled={loadingAvoid}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingAvoid ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
             {avoidFoods ? (
               <p className="text-sm text-foreground whitespace-pre-wrap">{avoidFoods}</p>
             ) : (
-              <Button
-                onClick={generateAvoidFoods}
-                disabled={loadingAvoid}
-                className="w-full"
-                variant="outline"
-              >
-                {loadingAvoid ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Get Foods to Avoid
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Getting foods to avoid...
+              </div>
             )}
           </CardContent>
         </Card>
