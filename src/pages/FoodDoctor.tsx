@@ -1,139 +1,190 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { format } from 'date-fns';
 import { 
   Stethoscope, 
-  Send, 
-  Loader2,
-  Sparkles,
+  MessageSquare,
   Apple,
   Carrot,
   Egg,
   Fish,
-  AlertCircle,
-  Plus
+  AlertTriangle,
+  ChevronRight,
+  Flame,
+  Target,
+  Heart,
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
+interface Profile {
+  full_name: string | null;
+  fitness_goal: string | null;
+  health_conditions: string[] | null;
+  dietary_restrictions: string[] | null;
+  allergies: string[] | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+}
+
+interface DailySummary {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 export default function FoodDoctor() {
   const { t } = useLanguage();
-  const { session, user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [dailySummary, setDailySummary] = useState<DailySummary>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [loading, setLoading] = useState(true);
 
-  const suggestions = [
-    { icon: Apple, text: 'Best foods for weight loss' },
-    { icon: Egg, text: 'High protein Bengali dishes' },
-    { icon: Carrot, text: 'Healthy snack ideas' },
-    { icon: Fish, text: 'Fish recipes for muscle gain' },
-  ];
+  // Goals based on common recommendations
+  const goals = {
+    calories: 2000,
+    protein: 60,
+    carbs: 250,
+    fat: 65,
+  };
 
   useEffect(() => {
-    if (user) {
-      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => setProfile(data));
-    }
+    fetchData();
   }, [user]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  async function fetchData() {
+    if (!user) return;
 
-  const handleSend = async () => {
-    if (!input.trim() || !session) return;
+    const today = format(new Date(), 'yyyy-MM-dd');
 
-    const userMessage = input.trim();
-    setInput('');
-    const newMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
-    setMessages(newMessages);
-    setLoading(true);
+    const [profileResult, foodLogsResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('full_name, fitness_goal, health_conditions, dietary_restrictions, allergies, height_cm, weight_kg')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('food_logs')
+        .select('calories, protein_g, carbs_g, fat_g')
+        .eq('user_id', user.id)
+        .gte('logged_at', `${today}T00:00:00`)
+        .lte('logged_at', `${today}T23:59:59`)
+    ]);
 
-    let assistantContent = '';
+    if (profileResult.data) setProfile(profileResult.data);
+    
+    if (foodLogsResult.data) {
+      setDailySummary({
+        calories: foodLogsResult.data.reduce((sum, log) => sum + (Number(log.calories) || 0), 0),
+        protein: foodLogsResult.data.reduce((sum, log) => sum + (Number(log.protein_g) || 0), 0),
+        carbs: foodLogsResult.data.reduce((sum, log) => sum + (Number(log.carbs_g) || 0), 0),
+        fat: foodLogsResult.data.reduce((sum, log) => sum + (Number(log.fat_g) || 0), 0),
+      });
+    }
+    
+    setLoading(false);
+  }
 
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            messages: newMessages,
-            userContext: profile ? {
-              dietaryRestrictions: profile.dietary_restrictions,
-              allergies: profile.allergies,
-              fitnessGoal: profile.fitness_goal,
-              healthConditions: profile.health_conditions,
-            } : null,
-          }),
-        }
-      );
+  const calculateBMI = () => {
+    if (!profile?.height_cm || !profile?.weight_kg) return null;
+    const heightM = profile.height_cm / 100;
+    return profile.weight_kg / (heightM * heightM);
+  };
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          toast.error('Rate limit exceeded. Please try again later.');
-        } else if (response.status === 402) {
-          toast.error('AI credits exhausted. Please add credits.');
-        }
-        throw new Error('AI request failed');
-      }
+  const bmi = calculateBMI();
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+  const nutritionTips = [
+    {
+      icon: Apple,
+      title: 'Eat More Fruits',
+      description: 'Aim for 2-3 servings of fresh fruits daily for vitamins and fiber.',
+      color: 'text-green-600',
+      bgColor: 'bg-green-500/10',
+    },
+    {
+      icon: Fish,
+      title: 'Include Protein',
+      description: 'Each meal should have a protein source like fish, eggs, or dal.',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-500/10',
+    },
+    {
+      icon: Carrot,
+      title: 'Colorful Vegetables',
+      description: 'Fill half your plate with vegetables of different colors.',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-500/10',
+    },
+    {
+      icon: Egg,
+      title: 'Smart Cooking',
+      description: 'Use less oil and prefer steaming, grilling over deep frying.',
+      color: 'text-yellow-600',
+      bgColor: 'bg-yellow-500/10',
+    },
+  ];
 
-      if (reader) {
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const json = JSON.parse(line.slice(6));
-                const content = json.choices?.[0]?.delta?.content;
-                if (content) {
-                  assistantContent += content;
-                  setMessages([...newMessages, { role: 'assistant', content: assistantContent }]);
-                }
-              } catch {}
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Chat error:', error);
-      if (!assistantContent) {
-        setMessages([...newMessages, { role: 'assistant', content: "Sorry, I couldn't process that. Please try again." }]);
-      }
-    } finally {
-      setLoading(false);
+  const getGoalBasedAdvice = () => {
+    switch (profile?.fitness_goal) {
+      case 'weight_loss':
+        return {
+          title: 'Weight Loss Tips',
+          tips: [
+            'Focus on high-protein, low-calorie meals',
+            'Avoid fried Bengali snacks like singara and pakora',
+            'Choose roti over rice for dinner',
+            'Drink water before meals to reduce appetite',
+          ],
+        };
+      case 'weight_gain':
+        return {
+          title: 'Weight Gain Tips',
+          tips: [
+            'Add healthy fats like ghee and nuts',
+            'Include calorie-dense foods like khichuri with ghee',
+            'Snack on mishti doi and bananas',
+            'Eat larger portions of rice with fish curry',
+          ],
+        };
+      case 'muscle_gain':
+        return {
+          title: 'Muscle Building Tips',
+          tips: [
+            'Eat protein with every meal (eggs, fish, chicken)',
+            'Include dal in your lunch and dinner',
+            'Add paneer or chhena to your diet',
+            'Post-workout: have a banana shake with eggs',
+          ],
+        };
+      default:
+        return {
+          title: 'General Health Tips',
+          tips: [
+            'Balance your macros throughout the day',
+            'Include a variety of foods in your diet',
+            'Stay hydrated with water and coconut water',
+            'Limit processed foods and excess sugar',
+          ],
+        };
     }
   };
 
+  const goalAdvice = getGoalBasedAdvice();
+
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-4rem)] lg:h-screen flex flex-col p-4 lg:p-8 pb-24 lg:pb-8 max-w-4xl mx-auto">
-        <div className="animate-fade-in mb-6">
+      <div className="p-4 lg:p-8 pb-24 lg:pb-8 space-y-6 max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="animate-fade-in">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-full bg-primary/10">
               <Stethoscope className="w-6 h-6 text-primary" />
@@ -145,62 +196,161 @@ export default function FoodDoctor() {
           <p className="text-muted-foreground">{t('foodDoctor.subtitle')}</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center animate-fade-in">
-              <div className="p-4 rounded-full bg-primary/10 mb-4">
-                <Sparkles className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="font-display text-xl font-semibold text-foreground mb-2">
-                Ask me anything about nutrition!
-              </h2>
-              <p className="text-muted-foreground text-center max-w-md mb-6">
-                Get personalized advice about Bengali foods, diet plans, healthy recipes, and more.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-                {suggestions.map((s, i) => (
-                  <button key={i} onClick={() => setInput(s.text)}
-                    className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:border-primary/50 transition-all text-left">
-                    <s.icon className="w-5 h-5 text-primary shrink-0" />
-                    <span className="text-sm text-foreground">{s.text}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                <div className={`max-w-[85%] p-4 rounded-2xl ${m.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border border-border rounded-tl-sm'}`}>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+        {/* AI Assistant CTA */}
+        <Link to="/ai-assistant" className="block animate-slide-up">
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:shadow-xl transition-shadow">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-full bg-primary-foreground/20">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-bold mb-1">
+                    Chat with AI Assistant
+                  </h3>
+                  <p className="text-sm opacity-90">
+                    Get personalized nutrition advice and ask any health questions
+                  </p>
                 </div>
               </div>
-            ))
-          )}
-          {loading && !messages.find(m => m.role === 'assistant' && messages.indexOf(m) === messages.length - 1) && (
-            <div className="flex justify-start animate-fade-in">
-              <div className="bg-card border border-border p-4 rounded-2xl rounded-tl-sm">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Thinking...</span>
+              <ChevronRight className="w-6 h-6" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Today's Nutrition Overview */}
+        <Card className="border-0 shadow-lg animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <CardHeader className="pb-2">
+            <CardTitle className="font-display text-lg flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Today's Nutrition
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <Flame className="w-4 h-4 text-terracotta" />
+                  <span className="text-sm text-muted-foreground">Calories</span>
                 </div>
+                <p className="text-xl font-bold">{Math.round(dailySummary.calories)} <span className="text-sm font-normal text-muted-foreground">/ {goals.calories}</span></p>
+                <Progress value={(dailySummary.calories / goals.calories) * 100} className="h-1.5 mt-2" />
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-4 h-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">Protein</span>
+                </div>
+                <p className="text-xl font-bold">{Math.round(dailySummary.protein)}g <span className="text-sm font-normal text-muted-foreground">/ {goals.protein}g</span></p>
+                <Progress value={(dailySummary.protein / goals.protein) * 100} className="h-1.5 mt-2" />
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
+            
+            {dailySummary.calories > goals.calories && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-700">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p className="text-sm">You've exceeded your calorie goal for today. Consider lighter options for your next meal.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Health Profile Summary */}
+        {(profile?.health_conditions?.length || profile?.allergies?.length || profile?.dietary_restrictions?.length) && (
+          <Card className="border-0 shadow-lg animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-lg flex items-center gap-2">
+                <Heart className="w-5 h-5 text-primary" />
+                Your Health Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profile?.health_conditions?.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Health Conditions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.health_conditions.map((condition, i) => (
+                      <Badge key={i} variant="outline" className="bg-red-500/10 text-red-700 border-red-200">
+                        {condition}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {profile?.allergies?.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Allergies</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.allergies.map((allergy, i) => (
+                      <Badge key={i} variant="outline" className="bg-orange-500/10 text-orange-700 border-orange-200">
+                        {allergy}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {profile?.dietary_restrictions?.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Dietary Restrictions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.dietary_restrictions.map((restriction, i) => (
+                      <Badge key={i} variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200">
+                        {restriction}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Goal-Based Advice */}
+        <Card className="border-0 shadow-lg animate-slide-up" style={{ animationDelay: '200ms' }}>
+          <CardHeader className="pb-2">
+            <CardTitle className="font-display text-lg flex items-center gap-2">
+              <Target className="w-5 h-5 text-primary" />
+              {goalAdvice.title}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {goalAdvice.tips.map((tip, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <span className="text-primary mt-1">•</span>
+                  <span className="text-foreground">{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Quick Nutrition Tips */}
+        <div className="animate-slide-up" style={{ animationDelay: '250ms' }}>
+          <h2 className="font-display text-lg font-semibold mb-4">Nutrition Tips</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {nutritionTips.map((tip, index) => (
+              <Card key={index} className="border-0 shadow-md">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${tip.bgColor}`}>
+                      <tip.icon className={`w-5 h-5 ${tip.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-foreground">{tip.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{tip.description}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 mb-4">
+        {/* Disclaimer */}
+        <div className="flex items-start gap-2 p-4 rounded-lg bg-muted/50 animate-slide-up" style={{ animationDelay: '300ms' }}>
           <AlertCircle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">{t('foodDoctor.disclaimer')}</p>
-        </div>
-
-        <div className="flex gap-2">
-          <Input value={input} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !loading && handleSend()}
-            placeholder={t('foodDoctor.askQuestion')} className="flex-1" disabled={loading} />
-          <Button onClick={handleSend} disabled={!input.trim() || loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
         </div>
       </div>
     </AppLayout>

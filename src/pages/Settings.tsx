@@ -41,7 +41,6 @@ interface Profile {
   disliked_foods: string[] | null;
   avatar_url: string | null;
   ai_provider: string | null;
-  custom_api_key: string | null;
   custom_api_endpoint: string | null;
 }
 
@@ -254,7 +253,7 @@ export default function Settings() {
           <h3 className="text-sm font-medium text-muted-foreground mb-2 px-1">AI Configuration</h3>
           <AIProviderSettings
             currentProvider={profile?.ai_provider || 'lovable_ai'}
-            customApiKey={profile?.custom_api_key || null}
+            customApiKey={null}
             customEndpoint={profile?.custom_api_endpoint || null}
             onSaved={fetchProfile}
           />

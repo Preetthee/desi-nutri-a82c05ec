@@ -4,6 +4,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
 import AIExerciseInput from '@/components/exercise/AIExerciseInput';
+import ExerciseGoals from '@/components/exercise/ExerciseGoals';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -241,6 +242,9 @@ export default function Exercise() {
             </DialogContent>
         </Dialog>
         </div>
+
+        {/* Exercise Goals */}
+        <ExerciseGoals todayDuration={totalDuration} todayCalories={totalCalories} />
 
         {/* AI Exercise Input */}
         <AIExerciseInput onExerciseAdded={fetchLogs} />
