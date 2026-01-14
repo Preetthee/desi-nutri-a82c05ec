@@ -8,12 +8,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { 
   Scale, 
-  AlertTriangle, 
   Loader2, 
   Sparkles,
   AlertCircle,
-  ChevronDown,
-  ChevronUp
+  RefreshCw
 } from 'lucide-react';
 
 interface Profile {
@@ -23,19 +21,12 @@ interface Profile {
   health_conditions: string[] | null;
 }
 
-interface FoodLog {
-  food_name: string;
-  calories: number;
-}
-
 export default function BMICard() {
   const { user, session } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [recentFoods, setRecentFoods] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingAdvice, setLoadingAdvice] = useState(false);
-  const [advice, setAdvice] = useState<string | null>(null);
-  const [showAdvice, setShowAdvice] = useState(false);
+  const [loadingTip, setLoadingTip] = useState(false);
+  const [dailyTip, setDailyTip] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -44,27 +35,19 @@ export default function BMICard() {
   async function fetchData() {
     if (!user) return;
 
-    // Fetch profile and recent foods in parallel
-    const [profileResult, foodsResult] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('height_cm, weight_kg, fitness_goal, health_conditions')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-      supabase
-        .from('food_logs')
-        .select('food_name, calories')
-        .eq('user_id', user.id)
-        .order('logged_at', { ascending: false })
-        .limit(20)
-    ]);
+    const { data } = await supabase
+      .from('profiles')
+      .select('height_cm, weight_kg, fitness_goal, health_conditions')
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-    if (profileResult.data) setProfile(profileResult.data);
-    if (foodsResult.data) {
-      const uniqueFoods = [...new Set(foodsResult.data.map(f => f.food_name))];
-      setRecentFoods(uniqueFoods.slice(0, 10));
-    }
+    if (data) setProfile(data);
     setLoading(false);
+    
+    // Auto-fetch daily tip
+    if (data?.height_cm && data?.weight_kg) {
+      fetchDailyTip(data);
+    }
   }
 
   const calculateBMI = () => {
@@ -74,20 +57,24 @@ export default function BMICard() {
   };
 
   const getBMICategory = (bmi: number) => {
-    if (bmi < 18.5) return { label: 'Underweight', color: 'bg-blue-500/10 text-blue-600', severity: 'warning' };
-    if (bmi < 25) return { label: 'Normal', color: 'bg-green-500/10 text-green-600', severity: 'success' };
-    if (bmi < 30) return { label: 'Overweight', color: 'bg-yellow-500/10 text-yellow-600', severity: 'warning' };
-    return { label: 'Obese', color: 'bg-red-500/10 text-red-600', severity: 'error' };
+    if (bmi < 18.5) return { label: 'Underweight', color: 'bg-sage/20 text-sage' };
+    if (bmi < 25) return { label: 'Normal', color: 'bg-primary/20 text-primary' };
+    if (bmi < 30) return { label: 'Overweight', color: 'bg-golden/20 text-golden' };
+    return { label: 'Obese', color: 'bg-terracotta/20 text-terracotta' };
   };
 
-  async function getFoodAdvice() {
+  async function fetchDailyTip(profileData?: Profile) {
     if (!session) return;
     
-    setLoadingAdvice(true);
-    setShowAdvice(true);
+    const data = profileData || profile;
+    if (!data) return;
+    
+    setLoadingTip(true);
 
     try {
-      const bmi = calculateBMI();
+      const bmi = data.height_cm && data.weight_kg 
+        ? data.weight_kg / Math.pow(data.height_cm / 100, 2)
+        : null;
       const category = bmi ? getBMICategory(bmi) : null;
 
       const response = await fetch(
@@ -101,23 +88,17 @@ export default function BMICard() {
           body: JSON.stringify({
             messages: [{
               role: 'user',
-              content: `Based on my BMI of ${bmi?.toFixed(1)} (${category?.label}), fitness goal: "${profile?.fitness_goal || 'general health'}", and these foods I've eaten recently: ${recentFoods.join(', ')}. 
-              
-Please provide a brief, actionable list of:
-1. 3-4 specific foods from my recent meals I should AVOID or eat less of
-2. 3-4 healthier alternatives I could try instead
+              content: `Give me ONE short, actionable daily food tip (max 25 words, 3 lines) based on:
+- BMI: ${bmi?.toFixed(1)} (${category?.label})
+- Goal: ${data.fitness_goal || 'general health'}
 
-Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
+Just the tip, no intro or explanation.`
             }],
-            userContext: {
-              healthConditions: profile?.health_conditions,
-              fitnessGoal: profile?.fitness_goal,
-            },
           }),
         }
       );
 
-      if (!response.ok) throw new Error('Failed to get advice');
+      if (!response.ok) throw new Error('Failed');
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -140,7 +121,7 @@ Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
                 const chunk = json.choices?.[0]?.delta?.content;
                 if (chunk) {
                   content += chunk;
-                  setAdvice(content);
+                  setDailyTip(content);
                 }
               } catch {}
             }
@@ -148,11 +129,10 @@ Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
         }
       }
     } catch (error) {
-      console.error('Error getting advice:', error);
-      toast.error('Failed to get food advice');
-      setAdvice('Unable to load advice. Please try again.');
+      console.error('Error getting tip:', error);
+      toast.error('Failed to get food tip');
     } finally {
-      setLoadingAdvice(false);
+      setLoadingTip(false);
     }
   }
 
@@ -183,7 +163,7 @@ Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
   }
 
   return (
-    <Card className="border-0 shadow-lg animate-slide-up">
+    <Card className="border-0 shadow-lg animate-slide-up bg-gradient-to-br from-primary/5 to-sage/10">
       <CardHeader className="pb-2">
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Scale className="w-5 h-5 text-primary" />
@@ -208,7 +188,7 @@ Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
         </div>
 
         {/* BMI Scale Visual */}
-        <div className="relative h-2 bg-gradient-to-r from-blue-400 via-green-400 via-yellow-400 to-red-400 rounded-full">
+        <div className="relative h-2 bg-gradient-to-r from-sage via-primary via-golden to-terracotta rounded-full">
           <div 
             className="absolute -top-1 w-4 h-4 bg-foreground rounded-full border-2 border-background shadow-md"
             style={{ 
@@ -225,36 +205,39 @@ Keep it concise and specific to Bengali/South Asian cuisine if relevant.`
           <span>40</span>
         </div>
 
-        {/* Food Advice Section */}
+        {/* Daily Food Tip - Short 3 line version */}
         <div className="pt-2 border-t border-border">
-          <Button 
-            variant="outline" 
-            className="w-full justify-between"
-            onClick={() => advice ? setShowAdvice(!showAdvice) : getFoodAdvice()}
-            disabled={loadingAdvice}
-          >
-            <span className="flex items-center gap-2">
-              {loadingAdvice ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 text-primary" />
-              )}
-              {advice ? 'Foods to Avoid' : 'Get AI Food Suggestions'}
-            </span>
-            {advice && (showAdvice ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-          </Button>
-
-          {showAdvice && advice && (
-            <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
-              <p className="whitespace-pre-wrap text-foreground">{advice}</p>
-              <div className="flex items-start gap-2 mt-3 pt-2 border-t border-border">
-                <AlertTriangle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                <p className="text-xs text-muted-foreground">
-                  This is AI-generated advice. Consult a healthcare professional for medical decisions.
-                </p>
-              </div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-golden" />
+              <span className="text-sm font-medium text-foreground">Daily Food Tip</span>
             </div>
-          )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fetchDailyTip()}
+              disabled={loadingTip}
+              className="h-7 w-7"
+            >
+              {loadingTip ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+            </Button>
+          </div>
+          <div className="p-3 rounded-lg bg-golden/10 border border-golden/20">
+            {loadingTip && !dailyTip ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Getting your tip...
+              </div>
+            ) : (
+              <p className="text-sm text-foreground line-clamp-3">
+                {dailyTip || 'Click refresh to get a personalized food tip!'}
+              </p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

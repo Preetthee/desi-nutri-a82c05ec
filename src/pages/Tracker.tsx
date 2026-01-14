@@ -6,22 +6,16 @@ import AppLayout from '@/components/layout/AppLayout';
 import AIFoodInput from '@/components/tracker/AIFoodInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
-  Plus, 
   Coffee, 
   Sun, 
   Moon, 
   Cookie, 
   Droplets,
-  Trash2,
-  Loader2
+  Trash2
 } from 'lucide-react';
 
 interface FoodLog {
@@ -49,18 +43,7 @@ export default function Tracker() {
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingFood, setAddingFood] = useState(false);
   const [addingWater, setAddingWater] = useState(false);
-  const [foodDialogOpen, setFoodDialogOpen] = useState(false);
-  const [selectedMealType, setSelectedMealType] = useState('breakfast');
-
-  // Form state for adding food
-  const [foodName, setFoodName] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
-  const [quantity, setQuantity] = useState('1');
 
   const waterGoal = 2500; // ml
   const totalWater = waterLogs.reduce((sum, log) => sum + log.amount_ml, 0);
@@ -103,32 +86,6 @@ export default function Tracker() {
     setLoading(false);
   }
 
-  async function addFood() {
-    if (!user || !foodName.trim()) return;
-
-    setAddingFood(true);
-    const { error } = await supabase.from('food_logs').insert({
-      user_id: user.id,
-      meal_type: selectedMealType,
-      food_name: foodName.trim(),
-      calories: calories ? parseFloat(calories) : null,
-      protein_g: protein ? parseFloat(protein) : null,
-      carbs_g: carbs ? parseFloat(carbs) : null,
-      fat_g: fat ? parseFloat(fat) : null,
-      quantity: quantity ? parseFloat(quantity) : 1,
-    });
-
-    if (error) {
-      toast.error(t('common.error'));
-    } else {
-      toast.success(t('common.success'));
-      resetFoodForm();
-      setFoodDialogOpen(false);
-      fetchLogs();
-    }
-    setAddingFood(false);
-  }
-
   async function deleteFood(id: string) {
     const { error } = await supabase.from('food_logs').delete().eq('id', id);
     if (error) {
@@ -156,15 +113,6 @@ export default function Tracker() {
     setAddingWater(false);
   }
 
-  function resetFoodForm() {
-    setFoodName('');
-    setCalories('');
-    setProtein('');
-    setCarbs('');
-    setFat('');
-    setQuantity('1');
-  }
-
   function getMealLogs(mealType: string) {
     return foodLogs.filter((log) => log.meal_type === mealType);
   }
@@ -183,10 +131,10 @@ export default function Tracker() {
         <AIFoodInput onFoodAdded={fetchLogs} />
 
         {/* Water Intake Card */}
-        <Card className="animate-slide-up border-0 shadow-lg bg-gradient-to-br from-blue-500/5 to-blue-600/10">
+        <Card className="animate-slide-up border-0 shadow-lg bg-gradient-to-br from-sage/10 to-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="font-display text-lg flex items-center gap-2">
-              <Droplets className="w-5 h-5 text-blue-500" />
+              <Droplets className="w-5 h-5 text-primary" />
               {t('tracker.waterIntake')}
             </CardTitle>
           </CardHeader>
@@ -209,7 +157,7 @@ export default function Tracker() {
                   size="sm"
                   onClick={() => addWater(amount)}
                   disabled={addingWater}
-                  className="flex-1"
+                  className="flex-1 border-primary/30 hover:bg-primary/10"
                 >
                   +{amount}ml
                 </Button>
@@ -218,7 +166,7 @@ export default function Tracker() {
           </CardContent>
         </Card>
 
-        {/* Meal Sections */}
+        {/* Meal Sections - View Only */}
         {mealTypes.map((meal, index) => {
           const logs = getMealLogs(meal.id);
           const mealCalories = logs.reduce((sum, log) => sum + (Number(log.calories) || 0), 0);
@@ -240,99 +188,6 @@ export default function Tracker() {
                       </span>
                     )}
                   </CardTitle>
-                  <Dialog open={foodDialogOpen && selectedMealType === meal.id} onOpenChange={(open) => {
-                    setFoodDialogOpen(open);
-                    if (open) setSelectedMealType(meal.id);
-                    else resetFoodForm();
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedMealType(meal.id)}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        {t('tracker.addFood')}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('tracker.addFood')} - {meal.label}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        <div className="space-y-2">
-                          <Label>Food Name *</Label>
-                          <Input
-                            value={foodName}
-                            onChange={(e) => setFoodName(e.target.value)}
-                            placeholder="e.g., Rice, Dal, Roti"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>{t('home.calories')} ({t('common.kcal')})</Label>
-                            <Input
-                              type="number"
-                              value={calories}
-                              onChange={(e) => setCalories(e.target.value)}
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Quantity</Label>
-                            <Input
-                              type="number"
-                              value={quantity}
-                              onChange={(e) => setQuantity(e.target.value)}
-                              placeholder="1"
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="space-y-2">
-                            <Label>{t('home.protein')} ({t('common.g')})</Label>
-                            <Input
-                              type="number"
-                              value={protein}
-                              onChange={(e) => setProtein(e.target.value)}
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t('home.carbs')} ({t('common.g')})</Label>
-                            <Input
-                              type="number"
-                              value={carbs}
-                              onChange={(e) => setCarbs(e.target.value)}
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t('home.fat')} ({t('common.g')})</Label>
-                            <Input
-                              type="number"
-                              value={fat}
-                              onChange={(e) => setFat(e.target.value)}
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                        <Button 
-                          onClick={addFood} 
-                          className="w-full"
-                          disabled={!foodName.trim() || addingFood}
-                        >
-                          {addingFood ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Adding...
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-4 h-4 mr-2" />
-                              {t('common.add')}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
