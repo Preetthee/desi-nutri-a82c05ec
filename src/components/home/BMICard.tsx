@@ -21,6 +21,28 @@ interface Profile {
   health_conditions: string[] | null;
 }
 
+const CACHE_KEY = 'bmi_daily_tip';
+
+function getCachedTip(userId: string) {
+  try {
+    const cached = localStorage.getItem(`${CACHE_KEY}_${userId}`);
+    if (!cached) return null;
+    const { tip, date } = JSON.parse(cached);
+    const today = new Date().toDateString();
+    if (date === today) return tip;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedTip(userId: string, tip: string) {
+  localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
+    tip,
+    date: new Date().toDateString()
+  }));
+}
+
 export default function BMICard() {
   const { user, session } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -44,9 +66,14 @@ export default function BMICard() {
     if (data) setProfile(data);
     setLoading(false);
     
-    // Auto-fetch daily tip
+    // Check cache first, only fetch if no cached tip for today
     if (data?.height_cm && data?.weight_kg) {
-      fetchDailyTip(data);
+      const cachedTip = getCachedTip(user.id);
+      if (cachedTip) {
+        setDailyTip(cachedTip);
+      } else {
+        fetchDailyTip(data);
+      }
     }
   }
 
@@ -63,11 +90,20 @@ export default function BMICard() {
     return { label: 'Obese', color: 'bg-terracotta/20 text-terracotta' };
   };
 
-  async function fetchDailyTip(profileData?: Profile) {
-    if (!session) return;
+  async function fetchDailyTip(profileData?: Profile, forceRefresh = false) {
+    if (!session || !user) return;
     
     const data = profileData || profile;
     if (!data) return;
+
+    // Check cache unless force refresh
+    if (!forceRefresh) {
+      const cachedTip = getCachedTip(user.id);
+      if (cachedTip) {
+        setDailyTip(cachedTip);
+        return;
+      }
+    }
     
     setLoadingTip(true);
 
@@ -127,6 +163,11 @@ Just the tip, no intro or explanation.`
             }
           }
         }
+      }
+      
+      // Cache the final tip
+      if (content) {
+        setCachedTip(user.id, content);
       }
     } catch (error) {
       console.error('Error getting tip:', error);
@@ -215,7 +256,7 @@ Just the tip, no intro or explanation.`
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => fetchDailyTip()}
+              onClick={() => fetchDailyTip(undefined, true)}
               disabled={loadingTip}
               className="h-7 w-7"
             >
