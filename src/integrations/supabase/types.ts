@@ -170,6 +170,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          provider: string
+          updated_at: string
+          user_id: string
+          vault_secret_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          provider: string
+          updated_at?: string
+          user_id: string
+          vault_secret_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          provider?: string
+          updated_at?: string
+          user_id?: string
+          vault_secret_id?: string
+        }
+        Relationships: []
+      }
       water_logs: {
         Row: {
           amount_ml: number
@@ -199,7 +226,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      delete_user_api_key: { Args: { p_provider: string }; Returns: boolean }
+      get_user_api_key: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: string
+      }
+      store_user_api_key: {
+        Args: { p_api_key: string; p_provider: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

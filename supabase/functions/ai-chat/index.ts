@@ -29,16 +29,31 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser(token);
       
       if (user) {
+        // Get profile for provider selection and endpoint
         const { data: profile } = await supabase
           .from("profiles")
-          .select("ai_provider, custom_api_key, custom_api_endpoint, dietary_restrictions, allergies, fitness_goal, health_conditions")
+          .select("ai_provider, custom_api_endpoint, dietary_restrictions, allergies, fitness_goal, health_conditions")
           .eq("user_id", user.id)
           .maybeSingle();
         
         if (profile) {
           aiProvider = profile.ai_provider || "lovable_ai";
-          customApiKey = profile.custom_api_key;
           customEndpoint = profile.custom_api_endpoint;
+          
+          // Get API key from vault using secure function (for openai or custom providers)
+          if (aiProvider === "openai" || aiProvider === "custom") {
+            const { data: vaultKey, error: vaultError } = await supabase
+              .rpc("get_user_api_key", { 
+                p_user_id: user.id, 
+                p_provider: aiProvider 
+              });
+            
+            if (vaultError) {
+              console.error("Error retrieving API key from vault:", vaultError);
+            } else {
+              customApiKey = vaultKey;
+            }
+          }
         }
       }
     }

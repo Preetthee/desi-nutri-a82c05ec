@@ -50,14 +50,28 @@ serve(async (req) => {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("ai_provider, custom_api_key, custom_api_endpoint")
+          .select("ai_provider, custom_api_endpoint")
           .eq("user_id", user.id)
           .maybeSingle();
         
         if (profile) {
           aiProvider = profile.ai_provider || "lovable_ai";
-          customApiKey = profile.custom_api_key;
           customEndpoint = profile.custom_api_endpoint;
+          
+          // Get API key from vault using secure function
+          if (aiProvider === "openai" || aiProvider === "custom") {
+            const { data: vaultKey, error: vaultError } = await supabase
+              .rpc("get_user_api_key", { 
+                p_user_id: user.id, 
+                p_provider: aiProvider 
+              });
+            
+            if (vaultError) {
+              console.error("Error retrieving API key from vault:", vaultError);
+            } else {
+              customApiKey = vaultKey;
+            }
+          }
         }
       }
     }
