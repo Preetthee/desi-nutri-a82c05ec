@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Tracker from "./pages/Tracker";
 import FoodDoctor from "./pages/FoodDoctor";
+import AIAssistant from "./pages/AIAssistant";
 import Analytics from "./pages/Analytics";
 import Exercise from "./pages/Exercise";
 import Settings from "./pages/Settings";
@@ -58,6 +59,11 @@ function AppRoutes() {
       <Route path="/food-doctor" element={
         <ProtectedRoute>
           <FoodDoctor />
+        </ProtectedRoute>
+      } />
+      <Route path="/ai-assistant" element={
+        <ProtectedRoute>
+          <AIAssistant />
         </ProtectedRoute>
       } />
       <Route path="/analytics" element={

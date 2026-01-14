@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
+import BMICard from '@/components/home/BMICard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { 
@@ -16,7 +17,8 @@ import {
   Wheat,
   Cookie,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Bot
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -124,10 +126,10 @@ export default function Home() {
       color: 'bg-primary/10 text-primary'
     },
     { 
-      icon: Droplets, 
-      label: t('home.logWater'), 
-      path: '/tracker',
-      color: 'bg-blue-500/10 text-blue-500'
+      icon: Bot, 
+      label: 'AI Assistant', 
+      path: '/ai-assistant',
+      color: 'bg-purple-500/10 text-purple-500'
     },
     { 
       icon: BarChart3, 
@@ -246,6 +248,9 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+
+        {/* BMI Card */}
+        <BMICard />
 
         {/* Quick Actions */}
         <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
