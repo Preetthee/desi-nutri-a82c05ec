@@ -57,6 +57,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Vibrant custom colors
+        sage: "hsl(var(--sage))",
+        terracotta: "hsl(var(--terracotta))",
+        golden: "hsl(var(--golden))",
+        cream: "hsl(var(--cream))",
+        forest: "hsl(var(--forest))",
       },
       borderRadius: {
         lg: "var(--radius)",
