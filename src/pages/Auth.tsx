@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Leaf, Eye, EyeOff, Loader2, Code } from 'lucide-react';
+import { Leaf, Eye, EyeOff, Loader2, Code, Globe } from 'lucide-react';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
@@ -30,11 +30,15 @@ export default function Auth() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
   
   const { signIn, signUp, user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const navigate = useNavigate();
 
-  // Show dev button if ?dev=true or in development
-  const showDevButton = searchParams.get('dev') === 'true' || import.meta.env.DEV;
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'bn' : 'en');
+  };
+
+  // Show dev button always (for easy demo access)
+  const showDevButton = true;
 
   useEffect(() => {
     if (user) {
@@ -148,6 +152,17 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-warm-green-light via-background to-terracotta-light p-4">
+      {/* Language Toggle - Top Right */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={toggleLanguage}
+        className="absolute top-4 right-4 gap-2"
+      >
+        <Globe className="w-4 h-4" />
+        {language === 'en' ? 'বাং' : 'EN'}
+      </Button>
+
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo and branding */}
         <div className="text-center mb-8">

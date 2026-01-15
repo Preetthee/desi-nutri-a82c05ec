@@ -45,9 +45,21 @@ interface DailySummary {
   fat: number;
 }
 
-const CACHE_KEY = 'food_doctor_cache';
+const CACHE_KEY = 'food_doctor_cache_v2';
 
-function getCachedData(userId: string) {
+interface BilingualContent {
+  en: string;
+  bn: string;
+}
+
+interface CachedData {
+  mealPlan: Record<string, BilingualContent>;
+  recommended: BilingualContent | null;
+  budget: BilingualContent | null;
+  avoid: BilingualContent | null;
+}
+
+function getCachedData(userId: string): CachedData | null {
   try {
     const cached = localStorage.getItem(`${CACHE_KEY}_${userId}`);
     if (!cached) return null;
@@ -60,7 +72,7 @@ function getCachedData(userId: string) {
   }
 }
 
-function setCachedData(userId: string, data: { mealPlan: Record<string, string>, recommended: string | null, budget: string | null, avoid: string | null }) {
+function setCachedData(userId: string, data: CachedData) {
   localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
     data,
     date: new Date().toDateString()
@@ -68,20 +80,20 @@ function setCachedData(userId: string, data: { mealPlan: Record<string, string>,
 }
 
 export default function FoodDoctor() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user, session } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummary>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loading, setLoading] = useState(true);
   
-  // AI-generated content states
-  const [mealPlan, setMealPlan] = useState<Record<string, string>>({});
+  // AI-generated content states - bilingual
+  const [mealPlan, setMealPlan] = useState<Record<string, BilingualContent>>({});
   const [loadingMeal, setLoadingMeal] = useState<string | null>(null);
-  const [recommendedFoods, setRecommendedFoods] = useState<string | null>(null);
+  const [recommendedFoods, setRecommendedFoods] = useState<BilingualContent | null>(null);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
-  const [budgetFoods, setBudgetFoods] = useState<string | null>(null);
+  const [budgetFoods, setBudgetFoods] = useState<BilingualContent | null>(null);
   const [loadingBudget, setLoadingBudget] = useState(false);
-  const [avoidFoods, setAvoidFoods] = useState<string | null>(null);
+  const [avoidFoods, setAvoidFoods] = useState<BilingualContent | null>(null);
   const [loadingAvoid, setLoadingAvoid] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
@@ -181,7 +193,7 @@ export default function FoodDoctor() {
     
     setLoadingMeal(mealType);
     try {
-      const response = await fetchAI(`Suggest 2 simple ${mealType} options for ${profile.fitness_goal || 'general health'}. Allergies: ${profile.allergies?.join(', ') || 'none'}. One line each, no long descriptions.`);
+      const response = await fetchAIBilingual(`Suggest 2 simple ${mealType} options for ${profile.fitness_goal || 'general health'}. Allergies: ${profile.allergies?.join(', ') || 'none'}. One line each, no long descriptions.`);
       
       setMealPlan(prev => ({ ...prev, [mealType]: response }));
     } catch (error) {
@@ -196,7 +208,7 @@ export default function FoodDoctor() {
     
     setLoadingRecommended(true);
     try {
-      const response = await fetchAI(`List only 3 recommended foods for ${profile.fitness_goal || 'general health'}. One line each with brief benefit.`);
+      const response = await fetchAIBilingual(`List only 3 recommended foods for ${profile.fitness_goal || 'general health'}. One line each with brief benefit.`);
       
       setRecommendedFoods(response);
     } catch (error) {
@@ -211,7 +223,7 @@ export default function FoodDoctor() {
     
     setLoadingBudget(true);
     try {
-      const response = await fetchAI(`List only 3 budget-friendly healthy foods. One line each with cost benefit. Keep it very short.`);
+      const response = await fetchAIBilingual(`List only 3 budget-friendly healthy foods. One line each with cost benefit. Keep it very short.`);
       
       setBudgetFoods(response);
     } catch (error) {
@@ -230,7 +242,7 @@ export default function FoodDoctor() {
         ? profile.weight_kg / Math.pow(profile.height_cm / 100, 2)
         : null;
         
-      const response = await fetchAI(`List only 3 foods to AVOID for BMI ${bmi?.toFixed(1) || 'unknown'}, ${profile.health_conditions?.join(', ') || 'no conditions'}. One line each with brief reason.`);
+      const response = await fetchAIBilingual(`List only 3 foods to AVOID for BMI ${bmi?.toFixed(1) || 'unknown'}, ${profile.health_conditions?.join(', ') || 'no conditions'}. One line each with brief reason.`);
       
       setAvoidFoods(response);
     } catch (error) {
@@ -240,7 +252,15 @@ export default function FoodDoctor() {
     }
   }
 
-  async function fetchAI(prompt: string): Promise<string> {
+  async function fetchAIBilingual(prompt: string): Promise<BilingualContent> {
+    const bilingualPrompt = `${prompt}
+
+IMPORTANT: Respond in BOTH English AND Bangla. Use this EXACT format:
+[ENGLISH]
+Your English response here
+[BANGLA]
+আপনার বাংলা প্রতিক্রিয়া এখানে`;
+
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
       {
@@ -250,7 +270,7 @@ export default function FoodDoctor() {
           Authorization: `Bearer ${session!.access_token}`,
         },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: bilingualPrompt }],
         }),
       }
     );
@@ -282,7 +302,15 @@ export default function FoodDoctor() {
         }
       }
     }
-    return content;
+
+    // Parse bilingual response
+    const englishMatch = content.match(/\[ENGLISH\]([\s\S]*?)(?=\[BANGLA\]|$)/i);
+    const banglaMatch = content.match(/\[BANGLA\]([\s\S]*?)$/i);
+    
+    return {
+      en: englishMatch?.[1]?.trim() || content.trim(),
+      bn: banglaMatch?.[1]?.trim() || content.trim()
+    };
   }
 
   return (
@@ -375,7 +403,7 @@ export default function FoodDoctor() {
                 <TabsContent key={tab.id} value={tab.id} className="mt-4">
                   {mealPlan[tab.id] ? (
                     <div className="space-y-2">
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{mealPlan[tab.id]}</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{mealPlan[tab.id][language]}</p>
                       <div className="flex justify-end">
                         <Button
                           variant="ghost"
@@ -391,7 +419,7 @@ export default function FoodDoctor() {
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating {tab.label.toLowerCase()} ideas...
+                      {language === 'en' ? `Generating ${tab.label.toLowerCase()} ideas...` : 'তৈরি হচ্ছে...'}
                     </div>
                   )}
                 </TabsContent>
@@ -421,11 +449,11 @@ export default function FoodDoctor() {
           </CardHeader>
           <CardContent>
             {recommendedFoods ? (
-              <p className="text-sm text-foreground whitespace-pre-wrap">{recommendedFoods}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{recommendedFoods[language]}</p>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Getting recommendations...
+                {language === 'en' ? 'Getting recommendations...' : 'সুপারিশ পাওয়া যাচ্ছে...'}
               </div>
             )}
           </CardContent>
@@ -452,11 +480,11 @@ export default function FoodDoctor() {
           </CardHeader>
           <CardContent>
             {budgetFoods ? (
-              <p className="text-sm text-foreground whitespace-pre-wrap">{budgetFoods}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{budgetFoods[language]}</p>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Getting budget options...
+                {language === 'en' ? 'Getting budget options...' : 'বাজেট বিকল্প পাওয়া যাচ্ছে...'}
               </div>
             )}
           </CardContent>
@@ -483,11 +511,11 @@ export default function FoodDoctor() {
           </CardHeader>
           <CardContent>
             {avoidFoods ? (
-              <p className="text-sm text-foreground whitespace-pre-wrap">{avoidFoods}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{avoidFoods[language]}</p>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Getting foods to avoid...
+                {language === 'en' ? 'Getting foods to avoid...' : 'এড়িয়ে চলা খাবার পাওয়া যাচ্ছে...'}
               </div>
             )}
           </CardContent>
