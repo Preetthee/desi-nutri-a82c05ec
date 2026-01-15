@@ -58,14 +58,14 @@ serve(async (req) => {
       }
     }
 
-    // Build system prompt with user context
-    const systemPrompt = `You are Desi Nutri AI, a friendly and knowledgeable nutrition and fitness assistant specializing in South Asian (especially Indian and Bengali) cuisine and lifestyle.
+    // Build system prompt with user context - Bangladesh focused
+    const systemPrompt = `You are Desi Nutri AI, a friendly and knowledgeable nutrition and fitness assistant specializing in Bangladeshi cuisine and lifestyle.
 
 Your personality:
 - Warm, encouraging, and supportive
-- Knowledgeable about traditional desi foods and their nutritional values
+- Knowledgeable about traditional Bangladeshi foods and their nutritional values
 - Practical and realistic with advice
-- Culturally aware and respectful
+- Culturally aware and respectful of Bangladeshi traditions
 
 ${userContext ? `User Context:
 - Dietary Restrictions: ${userContext.dietaryRestrictions?.join(", ") || "None specified"}
@@ -75,17 +75,26 @@ ${userContext ? `User Context:
 
 Guidelines:
 - Give personalized advice based on user's profile when available
-- Suggest desi-friendly alternatives when possible
+- Suggest Bangladeshi-friendly foods and alternatives (ভাত, মাছ, ডাল, সব্জি, etc.)
 - Include nutritional estimates when discussing foods
 - Be concise but helpful
-- When suggesting meals, mention approximate calories and macros`;
+- When suggesting meals, mention approximate calories and macros
+- Reference local markets and affordable options in BDT when relevant
+- Consider Bangladesh climate for exercise recommendations`;
 
+    // Check for OpenAI API key in secrets first (priority)
+    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
+    
     let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
     let apiKey = Deno.env.get("LOVABLE_API_KEY");
     let model = "google/gemini-3-flash-preview";
 
-    // Use custom provider if configured
-    if (aiProvider === "openai" && customApiKey) {
+    // Priority: OpenAI secret key > User's custom key > Lovable AI
+    if (openaiKey) {
+      apiUrl = "https://api.openai.com/v1/chat/completions";
+      apiKey = openaiKey;
+      model = "gpt-4o-mini";
+    } else if (aiProvider === "openai" && customApiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = customApiKey;
       model = "gpt-4o-mini";
@@ -99,7 +108,7 @@ Guidelines:
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Using AI provider: ${aiProvider}, model: ${model}`);
+    console.log(`Using AI provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, model: ${model}`);
 
     const response = await fetch(apiUrl, {
       method: "POST",

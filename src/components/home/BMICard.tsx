@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,34 +22,38 @@ interface Profile {
   health_conditions: string[] | null;
 }
 
-const CACHE_KEY = 'bmi_daily_tip';
+interface BilingualTip {
+  en: string;
+  bn: string;
+  date: string;
+}
 
-function getCachedTip(userId: string) {
+const CACHE_KEY = 'bmi_daily_tip_bilingual';
+
+function getCachedTip(userId: string): BilingualTip | null {
   try {
     const cached = localStorage.getItem(`${CACHE_KEY}_${userId}`);
     if (!cached) return null;
-    const { tip, date } = JSON.parse(cached);
+    const data = JSON.parse(cached) as BilingualTip;
     const today = new Date().toDateString();
-    if (date === today) return tip;
+    if (data.date === today) return data;
     return null;
   } catch {
     return null;
   }
 }
 
-function setCachedTip(userId: string, tip: string) {
-  localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
-    tip,
-    date: new Date().toDateString()
-  }));
+function setCachedTip(userId: string, tip: BilingualTip) {
+  localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify(tip));
 }
 
 export default function BMICard() {
   const { user, session } = useAuth();
+  const { language, t } = useLanguage();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingTip, setLoadingTip] = useState(false);
-  const [dailyTip, setDailyTip] = useState<string | null>(null);
+  const [bilingualTip, setBilingualTip] = useState<BilingualTip | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -70,7 +75,7 @@ export default function BMICard() {
     if (data?.height_cm && data?.weight_kg) {
       const cachedTip = getCachedTip(user.id);
       if (cachedTip) {
-        setDailyTip(cachedTip);
+        setBilingualTip(cachedTip);
       } else {
         fetchDailyTip(data);
       }
@@ -84,10 +89,10 @@ export default function BMICard() {
   };
 
   const getBMICategory = (bmi: number) => {
-    if (bmi < 18.5) return { label: 'Underweight', color: 'bg-sage/20 text-sage' };
-    if (bmi < 25) return { label: 'Normal', color: 'bg-primary/20 text-primary' };
-    if (bmi < 30) return { label: 'Overweight', color: 'bg-golden/20 text-golden' };
-    return { label: 'Obese', color: 'bg-terracotta/20 text-terracotta' };
+    if (bmi < 18.5) return { label: language === 'bn' ? 'কম ওজন' : 'Underweight', color: 'bg-sage/20 text-sage' };
+    if (bmi < 25) return { label: language === 'bn' ? 'স্বাভাবিক' : 'Normal', color: 'bg-primary/20 text-primary' };
+    if (bmi < 30) return { label: language === 'bn' ? 'অতিরিক্ত ওজন' : 'Overweight', color: 'bg-golden/20 text-golden' };
+    return { label: language === 'bn' ? 'স্থূলতা' : 'Obese', color: 'bg-terracotta/20 text-terracotta' };
   };
 
   async function fetchDailyTip(profileData?: Profile, forceRefresh = false) {
@@ -100,7 +105,7 @@ export default function BMICard() {
     if (!forceRefresh) {
       const cachedTip = getCachedTip(user.id);
       if (cachedTip) {
-        setDailyTip(cachedTip);
+        setBilingualTip(cachedTip);
         return;
       }
     }
@@ -111,7 +116,7 @@ export default function BMICard() {
       const bmi = data.height_cm && data.weight_kg 
         ? data.weight_kg / Math.pow(data.height_cm / 100, 2)
         : null;
-      const category = bmi ? getBMICategory(bmi) : null;
+      const categoryLabel = bmi && bmi < 18.5 ? 'Underweight' : bmi && bmi < 25 ? 'Normal' : bmi && bmi < 30 ? 'Overweight' : 'Obese';
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
@@ -124,11 +129,17 @@ export default function BMICard() {
           body: JSON.stringify({
             messages: [{
               role: 'user',
-              content: `Give me ONE short, actionable daily food tip (max 25 words, 3 lines) based on:
-- BMI: ${bmi?.toFixed(1)} (${category?.label})
+              content: `Give me ONE short, actionable daily food tip for Bangladesh (max 25 words, 3 lines) based on:
+- BMI: ${bmi?.toFixed(1)} (${categoryLabel})
 - Goal: ${data.fitness_goal || 'general health'}
 
-Just the tip, no intro or explanation.`
+Provide BOTH English and Bangla versions in this exact format:
+[ENGLISH]
+Your tip in English here
+[BANGLA]
+আপনার বাংলা টিপ এখানে
+
+Just the tips, no extra text.`
             }],
           }),
         }
@@ -157,7 +168,6 @@ Just the tip, no intro or explanation.`
                 const chunk = json.choices?.[0]?.delta?.content;
                 if (chunk) {
                   content += chunk;
-                  setDailyTip(content);
                 }
               } catch {}
             }
@@ -165,9 +175,19 @@ Just the tip, no intro or explanation.`
         }
       }
       
-      // Cache the final tip
+      // Parse bilingual response
       if (content) {
-        setCachedTip(user.id, content);
+        const englishMatch = content.match(/\[ENGLISH\]\s*([\s\S]*?)\s*\[BANGLA\]/i);
+        const banglaMatch = content.match(/\[BANGLA\]\s*([\s\S]*?)$/i);
+        
+        const tipData: BilingualTip = {
+          en: englishMatch?.[1]?.trim() || content.trim(),
+          bn: banglaMatch?.[1]?.trim() || content.trim(),
+          date: new Date().toDateString()
+        };
+        
+        setBilingualTip(tipData);
+        setCachedTip(user.id, tipData);
       }
     } catch (error) {
       console.error('Error getting tip:', error);
@@ -179,6 +199,7 @@ Just the tip, no intro or explanation.`
 
   const bmi = calculateBMI();
   const bmiCategory = bmi ? getBMICategory(bmi) : null;
+  const displayTip = bilingualTip ? (language === 'bn' ? bilingualTip.bn : bilingualTip.en) : null;
 
   if (loading) {
     return (
@@ -196,7 +217,11 @@ Just the tip, no intro or explanation.`
         <CardContent className="p-6">
           <div className="flex items-center gap-3 text-muted-foreground">
             <AlertCircle className="w-5 h-5" />
-            <p className="text-sm">Add your height and weight in Settings to see your BMI</p>
+            <p className="text-sm">
+              {language === 'bn' 
+                ? 'আপনার BMI দেখতে সেটিংসে উচ্চতা ও ওজন যোগ করুন' 
+                : 'Add your height and weight in Settings to see your BMI'}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -208,7 +233,7 @@ Just the tip, no intro or explanation.`
       <CardHeader className="pb-2">
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Scale className="w-5 h-5 text-primary" />
-          Your BMI
+          {language === 'bn' ? 'আপনার BMI' : 'Your BMI'}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -223,8 +248,8 @@ Just the tip, no intro or explanation.`
             </Badge>
           </div>
           <div className="text-right text-sm text-muted-foreground">
-            <p>{profile.weight_kg} kg</p>
-            <p>{profile.height_cm} cm</p>
+            <p>{profile.weight_kg} {t('common.kg')}</p>
+            <p>{profile.height_cm} {t('common.cm')}</p>
           </div>
         </div>
 
@@ -246,12 +271,14 @@ Just the tip, no intro or explanation.`
           <span>40</span>
         </div>
 
-        {/* Daily Food Tip - Short 3 line version */}
+        {/* Daily Food Tip - Bilingual */}
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-golden" />
-              <span className="text-sm font-medium text-foreground">Daily Food Tip</span>
+              <span className="text-sm font-medium text-foreground">
+                {t('home.dailyTip')}
+              </span>
             </div>
             <Button
               variant="ghost"
@@ -268,14 +295,16 @@ Just the tip, no intro or explanation.`
             </Button>
           </div>
           <div className="p-3 rounded-lg bg-golden/10 border border-golden/20">
-            {loadingTip && !dailyTip ? (
+            {loadingTip && !displayTip ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Getting your tip...
+                {language === 'bn' ? 'টিপ লোড হচ্ছে...' : 'Getting your tip...'}
               </div>
             ) : (
               <p className="text-sm text-foreground line-clamp-3">
-                {dailyTip || 'Click refresh to get a personalized food tip!'}
+                {displayTip || (language === 'bn' 
+                  ? 'রিফ্রেশ করে টিপ পান!' 
+                  : 'Click refresh to get a personalized food tip!')}
               </p>
             )}
           </div>

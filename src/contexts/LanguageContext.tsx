@@ -35,6 +35,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.logoutSuccess': 'Successfully logged out!',
     'auth.welcome': 'Welcome to Desi Nutri',
     'auth.tagline': 'Your personal nutrition companion',
+    'auth.devLogin': 'Dev Demo',
     
     // Home
     'home.greeting': 'Hello',
@@ -51,6 +52,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.viewAnalytics': 'View Analytics',
     'home.recentActivity': 'Recent Activity',
     'home.noActivity': 'No recent activity. Start tracking!',
+    'home.dailyTip': 'Daily Food Tip',
     
     // Daily Tracker
     'tracker.title': 'Daily Tracker',
@@ -72,6 +74,10 @@ const translations: Record<Language, Record<string, string>> = {
     'foodDoctor.askQuestion': 'Ask a question...',
     'foodDoctor.suggestions': 'Suggestions based on your profile',
     'foodDoctor.disclaimer': 'This is AI-generated advice. Consult a healthcare professional for medical decisions.',
+    'foodDoctor.mealPlan': 'Daily Meal Plan',
+    'foodDoctor.recommended': 'Recommended Foods',
+    'foodDoctor.budget': 'Budget-Friendly Foods',
+    'foodDoctor.avoid': 'Foods to Avoid',
     
     // Analytics
     'analytics.title': 'Analytics',
@@ -99,6 +105,12 @@ const translations: Record<Language, Record<string, string>> = {
     'exercise.strength': 'Strength',
     'exercise.flexibility': 'Flexibility',
     'exercise.sports': 'Sports',
+    'exercise.workoutPlan': "Today's Workout Plan",
+    'exercise.todaysTip': "Today's Tip",
+    'exercise.missedYesterday': 'Missed from Yesterday',
+    'exercise.progress': 'Progress',
+    'exercise.allComplete': 'Amazing! All workouts completed today!',
+    'exercise.noPlan': 'No workout plan available',
     
     // Settings
     'settings.title': 'Settings',
@@ -155,6 +167,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.cm': 'cm',
     'common.kg': 'kg',
     'common.years': 'years',
+    'common.min': 'min',
+    'common.refresh': 'Refresh',
   },
   bn: {
     // Navigation
@@ -182,6 +196,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.logoutSuccess': 'সফলভাবে লগ আউট হয়েছে!',
     'auth.welcome': 'দেশি নিউট্রিতে স্বাগতম',
     'auth.tagline': 'আপনার ব্যক্তিগত পুষ্টি সহায়ক',
+    'auth.devLogin': 'ডেভ ডেমো',
     
     // Home
     'home.greeting': 'হ্যালো',
@@ -198,6 +213,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.viewAnalytics': 'বিশ্লেষণ দেখুন',
     'home.recentActivity': 'সাম্প্রতিক কার্যকলাপ',
     'home.noActivity': 'কোন সাম্প্রতিক কার্যকলাপ নেই। ট্র্যাকিং শুরু করুন!',
+    'home.dailyTip': 'দৈনিক খাদ্য টিপ',
     
     // Daily Tracker
     'tracker.title': 'দৈনিক ট্র্যাকার',
@@ -219,6 +235,10 @@ const translations: Record<Language, Record<string, string>> = {
     'foodDoctor.askQuestion': 'একটি প্রশ্ন জিজ্ঞাসা করুন...',
     'foodDoctor.suggestions': 'আপনার প্রোফাইলের উপর ভিত্তি করে পরামর্শ',
     'foodDoctor.disclaimer': 'এটি AI-জেনারেটেড পরামর্শ। চিকিৎসা সিদ্ধান্তের জন্য স্বাস্থ্যসেবা পেশাদারের পরামর্শ নিন।',
+    'foodDoctor.mealPlan': 'দৈনিক খাদ্য তালিকা',
+    'foodDoctor.recommended': 'প্রস্তাবিত খাবার',
+    'foodDoctor.budget': 'সাশ্রয়ী খাবার',
+    'foodDoctor.avoid': 'এড়িয়ে চলুন',
     
     // Analytics
     'analytics.title': 'বিশ্লেষণ',
@@ -246,6 +266,12 @@ const translations: Record<Language, Record<string, string>> = {
     'exercise.strength': 'শক্তি',
     'exercise.flexibility': 'নমনীয়তা',
     'exercise.sports': 'খেলাধুলা',
+    'exercise.workoutPlan': 'আজকের ওয়ার্কআউট প্ল্যান',
+    'exercise.todaysTip': 'আজকের পরামর্শ',
+    'exercise.missedYesterday': 'গতকাল মিস করা ওয়ার্কআউট',
+    'exercise.progress': 'অগ্রগতি',
+    'exercise.allComplete': 'অসাধারণ! আজকের সব ওয়ার্কআউট সম্পন্ন!',
+    'exercise.noPlan': 'কোনো ওয়ার্কআউট প্ল্যান নেই',
     
     // Settings
     'settings.title': 'সেটিংস',
@@ -302,6 +328,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.cm': 'সেমি',
     'common.kg': 'কেজি',
     'common.years': 'বছর',
+    'common.min': 'মিনিট',
+    'common.refresh': 'রিফ্রেশ',
   },
 };
 

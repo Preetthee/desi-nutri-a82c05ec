@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Leaf, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Leaf, Eye, EyeOff, Loader2, Code } from 'lucide-react';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
 
+// Demo account credentials
+const DEMO_EMAIL = 'demo@desinutri.app';
+const DEMO_PASSWORD = 'demo123456';
+
 export default function Auth() {
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,11 +26,15 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDevLoading, setIsDevLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
   
   const { signIn, signUp, user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+
+  // Show dev button if ?dev=true or in development
+  const showDevButton = searchParams.get('dev') === 'true' || import.meta.env.DEV;
 
   useEffect(() => {
     if (user) {
@@ -95,6 +104,45 @@ export default function Auth() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setIsDevLoading(true);
+    
+    try {
+      // Try to sign in with demo credentials
+      const { error } = await signIn(DEMO_EMAIL, DEMO_PASSWORD);
+      
+      if (error) {
+        // If demo account doesn't exist, create it
+        if (error.message.includes('Invalid login credentials')) {
+          const { error: signUpError } = await signUp(DEMO_EMAIL, DEMO_PASSWORD, 'Demo User');
+          
+          if (signUpError) {
+            toast.error('Failed to create demo account: ' + signUpError.message);
+            return;
+          }
+          
+          // Account created, now sign in
+          const { error: signInError } = await signIn(DEMO_EMAIL, DEMO_PASSWORD);
+          if (signInError) {
+            toast.error('Failed to sign in to demo account');
+            return;
+          }
+        } else {
+          toast.error(error.message);
+          return;
+        }
+      }
+      
+      toast.success('Welcome to Demo Mode!');
+      navigate('/');
+    } catch (error) {
+      console.error('Dev login error:', error);
+      toast.error('Failed to login with demo account');
+    } finally {
+      setIsDevLoading(false);
     }
   };
 
@@ -238,6 +286,32 @@ export default function Auth() {
                 </span>
               </button>
             </div>
+
+            {/* Dev Login Button */}
+            {showDevButton && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDevLogin}
+                  disabled={isDevLoading}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {isDevLoading ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                      Loading Demo...
+                    </>
+                  ) : (
+                    <>
+                      <Code className="w-3 h-3 mr-2" />
+                      {t('auth.devLogin')} (Pre-filled Profile)
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

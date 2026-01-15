@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
 import AIExerciseInput from '@/components/exercise/AIExerciseInput';
 import ExerciseGoals from '@/components/exercise/ExerciseGoals';
+import WorkoutChecklist from '@/components/exercise/WorkoutChecklist';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -97,6 +98,9 @@ export default function Exercise() {
           </h1>
           <p className="text-muted-foreground mt-1">{t('common.today')}</p>
         </div>
+
+        {/* AI Workout Checklist - Daily plan with bilingual support */}
+        <WorkoutChecklist />
 
         {/* Exercise Goals - Always visible */}
         <ExerciseGoals todayDuration={totalDuration} todayCalories={totalCalories} />

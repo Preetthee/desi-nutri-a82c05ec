@@ -76,11 +76,18 @@ serve(async (req) => {
       }
     }
 
+    // Check for OpenAI API key in secrets first (priority)
+    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
+    
     let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
     let apiKey = Deno.env.get("LOVABLE_API_KEY");
     let model = "google/gemini-3-flash-preview";
 
-    if (aiProvider === "openai" && customApiKey) {
+    if (openaiKey) {
+      apiUrl = "https://api.openai.com/v1/chat/completions";
+      apiKey = openaiKey;
+      model = "gpt-4o-mini";
+    } else if (aiProvider === "openai" && customApiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = customApiKey;
       model = "gpt-4o-mini";
@@ -94,24 +101,31 @@ serve(async (req) => {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Parsing food with provider: ${aiProvider}`);
+    console.log(`Parsing food with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}`);
 
-    const systemPrompt = `You are a nutrition data extraction AI specializing in South Asian (especially Indian and Bengali) cuisine. 
+    const systemPrompt = `You are a nutrition data extraction AI specializing in Bangladeshi cuisine. 
 Parse the user's food description and extract individual food items with nutritional estimates.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text.
 
-For each food item, estimate realistic nutritional values based on typical serving sizes for Indian/Bengali foods.
+For each food item, estimate realistic nutritional values based on typical serving sizes for Bangladeshi foods.
 
-Common reference values:
-- Roti (1 piece): ~80 cal, 3g protein, 15g carbs, 1g fat
-- Rice (1 cup cooked): ~200 cal, 4g protein, 45g carbs, 0.5g fat
-- Dal (1 cup): ~150 cal, 9g protein, 25g carbs, 3g fat
-- Chicken curry (1 cup): ~280 cal, 25g protein, 10g carbs, 15g fat
-- Fish curry (1 cup): ~200 cal, 22g protein, 8g carbs, 10g fat
-- Egg (1 whole): ~70 cal, 6g protein, 0.5g carbs, 5g fat
-- Paratha (1 piece): ~150 cal, 4g protein, 20g carbs, 7g fat
-- Biryani (1 plate): ~400 cal, 15g protein, 55g carbs, 15g fat
+Common reference values for Bangladeshi foods:
+- ভাত/Rice (1 cup cooked): ~200 cal, 4g protein, 45g carbs, 0.5g fat
+- রুটি/Roti (1 piece): ~80 cal, 3g protein, 15g carbs, 1g fat
+- পরোটা/Paratha (1 piece): ~150 cal, 4g protein, 20g carbs, 7g fat
+- ডাল/Dal (1 cup): ~150 cal, 9g protein, 25g carbs, 3g fat
+- মুরগির মাংস/Chicken curry (1 cup): ~280 cal, 25g protein, 10g carbs, 15g fat
+- মাছের ঝোল/Fish curry (1 cup): ~200 cal, 22g protein, 8g carbs, 10g fat
+- ইলিশ মাছ/Hilsa (100g): ~310 cal, 22g protein, 0g carbs, 25g fat
+- ডিম/Egg (1 whole): ~70 cal, 6g protein, 0.5g carbs, 5g fat
+- বিরিয়ানি/Biryani (1 plate): ~400 cal, 15g protein, 55g carbs, 15g fat
+- খিচুড়ি/Khichuri (1 cup): ~250 cal, 8g protein, 40g carbs, 6g fat
+- ভর্তা/Bhorta (2 tbsp): ~80 cal, 2g protein, 5g carbs, 6g fat
+- শুটকি/Shutki (50g): ~150 cal, 30g protein, 0g carbs, 3g fat
+- সিঙ্গারা/Singara (1 piece): ~120 cal, 3g protein, 15g carbs, 6g fat
+- সমুচা/Samosa (1 piece): ~100 cal, 2g protein, 12g carbs, 5g fat
+- মিষ্টি/Mishti (1 piece): ~150 cal, 3g protein, 25g carbs, 5g fat
 
 Meal type should be one of: "breakfast", "lunch", "dinner", "snack" - infer from context or time mentioned.
 
