@@ -20,12 +20,18 @@ import {
 } from 'lucide-react';
 
 interface Workout {
+  id?: string;
   name: string;
   name_bn: string;
   duration: number;
   type: string;
   checked: boolean;
   completed_at: string | null;
+}
+
+interface BilingualMissed {
+  en: string;
+  bn: string;
 }
 
 interface WorkoutPlan {
@@ -38,11 +44,11 @@ interface WorkoutPlan {
 
 export default function WorkoutChecklist() {
   const { user, session } = useAuth();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [plan, setPlan] = useState<WorkoutPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
-  const [missedWorkouts, setMissedWorkouts] = useState<string[] | null>(null);
+  const [missedWorkouts, setMissedWorkouts] = useState<BilingualMissed[] | null>(null);
   const [fitnessGoal, setFitnessGoal] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function WorkoutChecklist() {
       setMissedWorkouts(data.missedWorkouts);
     } catch (error) {
       console.error('Error fetching plan:', error);
-      toast.error('Failed to load workout plan');
+      toast.error(language === 'bn' ? 'ওয়ার্কআউট প্ল্যান লোড করতে ব্যর্থ' : 'Failed to load workout plan');
     } finally {
       setLoading(false);
       setRegenerating(false);
@@ -117,7 +123,7 @@ export default function WorkoutChecklist() {
     // Optimistic update
     setPlan({ ...plan, workouts: updatedWorkouts });
 
-    // Save to database - cast to Json for Supabase
+    // Save to database
     const { error } = await supabase
       .from('workout_plans')
       .update({ workouts: updatedWorkouts as unknown as import('@/integrations/supabase/types').Json })
@@ -125,7 +131,7 @@ export default function WorkoutChecklist() {
 
     if (error) {
       console.error('Error updating workout:', error);
-      toast.error('Failed to save progress');
+      toast.error(language === 'bn' ? 'অগ্রগতি সংরক্ষণ করতে ব্যর্থ' : 'Failed to save progress');
       // Revert on error
       setPlan(plan);
     }
@@ -145,6 +151,11 @@ export default function WorkoutChecklist() {
   const totalCount = plan?.workouts.length || 0;
   const allComplete = completedCount === totalCount && totalCount > 0;
 
+  // Format missed workouts for display
+  const missedDisplay = missedWorkouts 
+    ? missedWorkouts.map(m => language === 'bn' ? m.bn : m.en).join(', ')
+    : null;
+
   if (loading) {
     return (
       <Card className="border-0 shadow-lg animate-pulse">
@@ -163,7 +174,7 @@ export default function WorkoutChecklist() {
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-primary" />
-            {language === 'bn' ? "আজকের ওয়ার্কআউট প্ল্যান" : "Today's Workout Plan"}
+            {t('exercise.workoutPlan')}
           </CardTitle>
           <Button
             variant="ghost"
@@ -178,16 +189,16 @@ export default function WorkoutChecklist() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Missed Workouts Alert */}
-        {missedWorkouts && missedWorkouts.length > 0 && (
+        {missedDisplay && (
           <div className="p-3 rounded-lg bg-terracotta/10 border border-terracotta/20">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-4 h-4 text-terracotta" />
               <span className="text-sm font-medium text-foreground">
-                {language === 'bn' ? 'গতকাল মিস করা ওয়ার্কআউট' : 'Missed from Yesterday'}
+                {t('exercise.missedYesterday')}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              {missedWorkouts.join(', ')}
+              {missedDisplay}
             </p>
           </div>
         )}
@@ -198,7 +209,7 @@ export default function WorkoutChecklist() {
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-4 h-4 text-golden" />
               <span className="text-sm font-medium text-foreground">
-                {language === 'bn' ? "আজকের পরামর্শ" : "Today's Tip"}
+                {t('exercise.todaysTip')}
               </span>
             </div>
             <p className="text-sm text-foreground">
@@ -210,7 +221,7 @@ export default function WorkoutChecklist() {
         {/* Progress */}
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
-            {language === 'bn' ? 'অগ্রগতি' : 'Progress'}
+            {t('exercise.progress')}
           </span>
           <span className={allComplete ? 'text-primary font-medium' : 'text-foreground'}>
             {completedCount}/{totalCount} {allComplete ? '✓' : ''}
@@ -246,7 +257,7 @@ export default function WorkoutChecklist() {
                   </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Timer className="w-3 h-3" />
-                    {workout.duration} {language === 'bn' ? 'মিনিট' : 'min'}
+                    {workout.duration} {t('common.min')}
                   </div>
                 </div>
               );
@@ -255,7 +266,7 @@ export default function WorkoutChecklist() {
         ) : (
           <div className="text-center py-6 text-muted-foreground">
             <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-50" />
-            <p>{language === 'bn' ? 'কোনো ওয়ার্কআউট প্ল্যান নেই' : 'No workout plan available'}</p>
+            <p>{t('exercise.noPlan')}</p>
           </div>
         )}
 
@@ -263,7 +274,7 @@ export default function WorkoutChecklist() {
         {allComplete && (
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-center">
             <p className="text-primary font-medium">
-              🎉 {language === 'bn' ? 'অসাধারণ! আজকের সব ওয়ার্কআউট সম্পন্ন!' : 'Amazing! All workouts completed today!'}
+              🎉 {t('exercise.allComplete')}
             </p>
           </div>
         )}

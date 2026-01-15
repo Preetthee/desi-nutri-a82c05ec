@@ -45,7 +45,7 @@ interface DailySummary {
   fat: number;
 }
 
-const CACHE_KEY = 'food_doctor_cache_v2';
+const CACHE_KEY = 'food_doctor_cache_v3';
 
 interface BilingualContent {
   en: string;
@@ -106,10 +106,10 @@ export default function FoodDoctor() {
   };
 
   const mealTabs = [
-    { id: 'breakfast', label: 'Breakfast', icon: Coffee },
-    { id: 'lunch', label: 'Lunch', icon: Sun },
-    { id: 'dinner', label: 'Dinner', icon: Moon },
-    { id: 'snacks', label: 'Snacks', icon: Cookie },
+    { id: 'breakfast', labelKey: 'tracker.breakfast', icon: Coffee },
+    { id: 'lunch', labelKey: 'tracker.lunch', icon: Sun },
+    { id: 'dinner', labelKey: 'tracker.dinner', icon: Moon },
+    { id: 'snacks', labelKey: 'tracker.snacks', icon: Cookie },
   ];
 
   useEffect(() => {
@@ -193,7 +193,10 @@ export default function FoodDoctor() {
     
     setLoadingMeal(mealType);
     try {
-      const response = await fetchAIBilingual(`Suggest 2 simple ${mealType} options for ${profile.fitness_goal || 'general health'}. Allergies: ${profile.allergies?.join(', ') || 'none'}. One line each, no long descriptions.`);
+      const mealName = mealType === 'breakfast' ? 'সকালের নাস্তা/breakfast' : 
+                       mealType === 'lunch' ? 'দুপুরের খাবার/lunch' : 
+                       mealType === 'dinner' ? 'রাতের খাবার/dinner' : 'স্ন্যাকস/snacks';
+      const response = await fetchAIBilingual(`Suggest 2 simple ${mealName} options for ${profile.fitness_goal || 'general health'}. Allergies: ${profile.allergies?.join(', ') || 'none'}. One line each, no long descriptions.`);
       
       setMealPlan(prev => ({ ...prev, [mealType]: response }));
     } catch (error) {
@@ -288,17 +291,49 @@ Your English response here
         if (done) break;
         
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const json = JSON.parse(line.slice(6));
-              const chunk = json.choices?.[0]?.delta?.content;
-              if (chunk) content += chunk;
-            } catch {}
+        
+        // Process line by line
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          
+          // Handle CRLF
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          
+          // Skip comments/keepalive
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          
+          try {
+            const json = JSON.parse(jsonStr);
+            const chunk = json.choices?.[0]?.delta?.content;
+            if (chunk) content += chunk;
+          } catch {
+            // Incomplete JSON - put it back and wait for more data
+            buffer = line + '\n' + buffer;
+            break;
           }
+        }
+      }
+      
+      // Final flush for any remaining buffer
+      if (buffer.trim()) {
+        for (let raw of buffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (raw.startsWith(':') || raw.trim() === '') continue;
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const json = JSON.parse(jsonStr);
+            const chunk = json.choices?.[0]?.delta?.content;
+            if (chunk) content += chunk;
+          } catch { /* ignore partial leftovers */ }
         }
       }
     }
@@ -339,10 +374,12 @@ Your English response here
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-bold mb-1">
-                    Chat with AI Assistant
+                    {language === 'bn' ? 'AI সহায়কের সাথে চ্যাট করুন' : 'Chat with AI Assistant'}
                   </h3>
                   <p className="text-sm opacity-90">
-                    Get personalized nutrition advice and ask any health questions
+                    {language === 'bn' 
+                      ? 'ব্যক্তিগত পুষ্টি পরামর্শ নিন এবং স্বাস্থ্য প্রশ্ন জিজ্ঞাসা করুন' 
+                      : 'Get personalized nutrition advice and ask any health questions'}
                   </p>
                 </div>
               </div>
@@ -356,7 +393,7 @@ Your English response here
           <CardHeader className="pb-2">
             <CardTitle className="font-display text-lg flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              Today's Nutrition
+              {language === 'bn' ? 'আজকের পুষ্টি' : "Today's Nutrition"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -364,7 +401,7 @@ Your English response here
               <div className="p-3 rounded-lg bg-muted/50">
                 <div className="flex items-center gap-2 mb-1">
                   <Flame className="w-4 h-4 text-terracotta" />
-                  <span className="text-sm text-muted-foreground">Calories</span>
+                  <span className="text-sm text-muted-foreground">{t('home.calories')}</span>
                 </div>
                 <p className="text-xl font-bold">{Math.round(dailySummary.calories)} <span className="text-sm font-normal text-muted-foreground">/ {goals.calories}</span></p>
                 <Progress value={(dailySummary.calories / goals.calories) * 100} className="h-1.5 mt-2" />
@@ -372,9 +409,9 @@ Your English response here
               <div className="p-3 rounded-lg bg-muted/50">
                 <div className="flex items-center gap-2 mb-1">
                   <Target className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-muted-foreground">Protein</span>
+                  <span className="text-sm text-muted-foreground">{t('home.protein')}</span>
                 </div>
-                <p className="text-xl font-bold">{Math.round(dailySummary.protein)}g <span className="text-sm font-normal text-muted-foreground">/ {goals.protein}g</span></p>
+                <p className="text-xl font-bold">{Math.round(dailySummary.protein)}{t('common.g')} <span className="text-sm font-normal text-muted-foreground">/ {goals.protein}{t('common.g')}</span></p>
                 <Progress value={(dailySummary.protein / goals.protein) * 100} className="h-1.5 mt-2" />
               </div>
             </div>
@@ -386,7 +423,7 @@ Your English response here
           <CardHeader className="pb-2">
             <CardTitle className="font-display text-lg flex items-center gap-2">
               <Coffee className="w-5 h-5 text-golden" />
-              Daily Meal Plan
+              {t('foodDoctor.mealPlan')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -395,7 +432,7 @@ Your English response here
                 {mealTabs.map((tab) => (
                   <TabsTrigger key={tab.id} value={tab.id} className="text-xs sm:text-sm">
                     <tab.icon className="w-4 h-4 mr-1 hidden sm:inline" />
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -419,7 +456,7 @@ Your English response here
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {language === 'en' ? `Generating ${tab.label.toLowerCase()} ideas...` : 'তৈরি হচ্ছে...'}
+                      {language === 'bn' ? 'তৈরি হচ্ছে...' : `Generating ${t(tab.labelKey).toLowerCase()} ideas...`}
                     </div>
                   )}
                 </TabsContent>
@@ -434,7 +471,7 @@ Your English response here
             <div className="flex items-center justify-between">
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <Apple className="w-5 h-5 text-primary" />
-                Recommended Foods
+                {t('foodDoctor.recommended')}
               </CardTitle>
               <Button
                 variant="ghost"
@@ -453,7 +490,7 @@ Your English response here
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {language === 'en' ? 'Getting recommendations...' : 'সুপারিশ পাওয়া যাচ্ছে...'}
+                {language === 'bn' ? 'সুপারিশ পাওয়া যাচ্ছে...' : 'Getting recommendations...'}
               </div>
             )}
           </CardContent>
@@ -465,7 +502,7 @@ Your English response here
             <div className="flex items-center justify-between">
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-golden" />
-                Budget-Friendly Foods
+                {t('foodDoctor.budget')}
               </CardTitle>
               <Button
                 variant="ghost"
@@ -484,7 +521,7 @@ Your English response here
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {language === 'en' ? 'Getting budget options...' : 'বাজেট বিকল্প পাওয়া যাচ্ছে...'}
+                {language === 'bn' ? 'বাজেট বিকল্প পাওয়া যাচ্ছে...' : 'Getting budget options...'}
               </div>
             )}
           </CardContent>
@@ -496,7 +533,7 @@ Your English response here
             <div className="flex items-center justify-between">
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <Ban className="w-5 h-5 text-terracotta" />
-                Foods to Avoid
+                {t('foodDoctor.avoid')}
               </CardTitle>
               <Button
                 variant="ghost"
@@ -515,7 +552,7 @@ Your English response here
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {language === 'en' ? 'Getting foods to avoid...' : 'এড়িয়ে চলা খাবার পাওয়া যাচ্ছে...'}
+                {language === 'bn' ? 'এড়িয়ে চলা খাবার পাওয়া যাচ্ছে...' : 'Getting foods to avoid...'}
               </div>
             )}
           </CardContent>

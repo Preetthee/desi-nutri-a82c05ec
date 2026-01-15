@@ -78,6 +78,9 @@ const translations: Record<Language, Record<string, string>> = {
     'foodDoctor.recommended': 'Recommended Foods',
     'foodDoctor.budget': 'Budget-Friendly Foods',
     'foodDoctor.avoid': 'Foods to Avoid',
+    'foodDoctor.chatCTA': 'Chat with AI Assistant',
+    'foodDoctor.chatDesc': 'Get personalized nutrition advice and ask any health questions',
+    'foodDoctor.nutrition': "Today's Nutrition",
     
     // Analytics
     'analytics.title': 'Analytics',
@@ -111,6 +114,13 @@ const translations: Record<Language, Record<string, string>> = {
     'exercise.progress': 'Progress',
     'exercise.allComplete': 'Amazing! All workouts completed today!',
     'exercise.noPlan': 'No workout plan available',
+    'exercise.dailyGoals': 'Daily Exercise Goals',
+    'exercise.todaySuggestion': "Today's Suggestion",
+    'exercise.targetMinutes': 'Target Minutes',
+    'exercise.targetCalories': 'Target Calories',
+    'exercise.exerciseDuration': 'Exercise Duration',
+    'exercise.caloriesBurnedProgress': 'Calories Burned',
+    'exercise.saveGoals': 'Save Goals',
     
     // Settings
     'settings.title': 'Settings',
@@ -169,6 +179,9 @@ const translations: Record<Language, Record<string, string>> = {
     'common.years': 'years',
     'common.min': 'min',
     'common.refresh': 'Refresh',
+    'common.saving': 'Saving...',
+    'common.gettingTip': 'Getting your tip...',
+    'common.generating': 'Generating...',
   },
   bn: {
     // Navigation
@@ -239,6 +252,9 @@ const translations: Record<Language, Record<string, string>> = {
     'foodDoctor.recommended': 'প্রস্তাবিত খাবার',
     'foodDoctor.budget': 'সাশ্রয়ী খাবার',
     'foodDoctor.avoid': 'এড়িয়ে চলুন',
+    'foodDoctor.chatCTA': 'AI সহায়কের সাথে চ্যাট করুন',
+    'foodDoctor.chatDesc': 'ব্যক্তিগত পুষ্টি পরামর্শ নিন এবং স্বাস্থ্য প্রশ্ন জিজ্ঞাসা করুন',
+    'foodDoctor.nutrition': 'আজকের পুষ্টি',
     
     // Analytics
     'analytics.title': 'বিশ্লেষণ',
@@ -272,6 +288,13 @@ const translations: Record<Language, Record<string, string>> = {
     'exercise.progress': 'অগ্রগতি',
     'exercise.allComplete': 'অসাধারণ! আজকের সব ওয়ার্কআউট সম্পন্ন!',
     'exercise.noPlan': 'কোনো ওয়ার্কআউট প্ল্যান নেই',
+    'exercise.dailyGoals': 'দৈনিক ব্যায়াম লক্ষ্য',
+    'exercise.todaySuggestion': 'আজকের পরামর্শ',
+    'exercise.targetMinutes': 'লক্ষ্য মিনিট',
+    'exercise.targetCalories': 'লক্ষ্য ক্যালোরি',
+    'exercise.exerciseDuration': 'ব্যায়ামের সময়কাল',
+    'exercise.caloriesBurnedProgress': 'ক্যালোরি পোড়ানো',
+    'exercise.saveGoals': 'লক্ষ্য সংরক্ষণ করুন',
     
     // Settings
     'settings.title': 'সেটিংস',
@@ -330,6 +353,9 @@ const translations: Record<Language, Record<string, string>> = {
     'common.years': 'বছর',
     'common.min': 'মিনিট',
     'common.refresh': 'রিফ্রেশ',
+    'common.saving': 'সংরক্ষণ হচ্ছে...',
+    'common.gettingTip': 'টিপ লোড হচ্ছে...',
+    'common.generating': 'তৈরি হচ্ছে...',
   },
 };
 
