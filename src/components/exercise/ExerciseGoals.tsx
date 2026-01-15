@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { Target, Flame, Timer, Loader2, Save, Sparkles } from 'lucide-react';
+import { Target, Flame, Timer, Loader2, Save, Sparkles, RefreshCw } from 'lucide-react';
 
 interface ExerciseGoalsProps {
   todayDuration: number;
@@ -24,14 +25,40 @@ interface Profile {
   fitness_goal: string | null;
 }
 
+interface BilingualSuggestion {
+  en: string;
+  bn: string;
+  date: string;
+}
+
+const CACHE_KEY = 'exercise_suggestion_bilingual';
+
+function getCachedSuggestion(userId: string): BilingualSuggestion | null {
+  try {
+    const cached = localStorage.getItem(`${CACHE_KEY}_${userId}`);
+    if (!cached) return null;
+    const data = JSON.parse(cached) as BilingualSuggestion;
+    const today = new Date().toDateString();
+    if (data.date === today) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSuggestion(userId: string, suggestion: BilingualSuggestion) {
+  localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify(suggestion));
+}
+
 export default function ExerciseGoals({ todayDuration, todayCalories }: ExerciseGoalsProps) {
   const { user, session } = useAuth();
+  const { language, t } = useLanguage();
   const [goals, setGoals] = useState<UserGoals | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [bilingualSuggestion, setBilingualSuggestion] = useState<BilingualSuggestion | null>(null);
   
   // Form state
   const [targetMinutes, setTargetMinutes] = useState('30');
@@ -67,12 +94,26 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
     }
     setLoading(false);
     
-    // Auto-fetch suggestion
-    fetchSuggestion(profileResult.data?.fitness_goal);
+    // Check cache for suggestion
+    const cached = getCachedSuggestion(user.id);
+    if (cached) {
+      setBilingualSuggestion(cached);
+    } else {
+      fetchSuggestion(profileResult.data?.fitness_goal);
+    }
   }
 
-  async function fetchSuggestion(fitnessGoal: string | null | undefined) {
-    if (!session) return;
+  async function fetchSuggestion(fitnessGoal: string | null | undefined, forceRefresh = false) {
+    if (!session || !user) return;
+    
+    // Check cache unless force refresh
+    if (!forceRefresh) {
+      const cached = getCachedSuggestion(user.id);
+      if (cached) {
+        setBilingualSuggestion(cached);
+        return;
+      }
+    }
     
     setLoadingSuggestion(true);
     try {
@@ -87,7 +128,15 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
           body: JSON.stringify({
             messages: [{
               role: 'user',
-              content: `Give me ONE short daily exercise suggestion (max 15 words) based on my fitness goal: "${fitnessGoal || 'general health'}". Just the suggestion, no intro.`
+              content: `Give me ONE short daily exercise suggestion (max 15 words) for Bangladesh based on fitness goal: "${fitnessGoal || 'general health'}". 
+
+Provide BOTH English and Bangla versions in this exact format:
+[ENGLISH]
+Your suggestion in English
+[BANGLA]
+আপনার বাংলা পরামর্শ
+
+Just the suggestions, no extra text.`
             }],
           }),
         }
@@ -116,12 +165,26 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
                 const chunk = json.choices?.[0]?.delta?.content;
                 if (chunk) {
                   content += chunk;
-                  setSuggestion(content);
                 }
               } catch {}
             }
           }
         }
+      }
+      
+      // Parse bilingual response
+      if (content) {
+        const englishMatch = content.match(/\[ENGLISH\]\s*([\s\S]*?)\s*\[BANGLA\]/i);
+        const banglaMatch = content.match(/\[BANGLA\]\s*([\s\S]*?)$/i);
+        
+        const suggestionData: BilingualSuggestion = {
+          en: englishMatch?.[1]?.trim() || content.trim(),
+          bn: banglaMatch?.[1]?.trim() || content.trim(),
+          date: new Date().toDateString()
+        };
+        
+        setBilingualSuggestion(suggestionData);
+        setCachedSuggestion(user.id, suggestionData);
       }
     } catch (error) {
       console.error('Error getting suggestion:', error);
@@ -159,10 +222,10 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
     }
 
     if (error) {
-      toast.error('Failed to save goals');
+      toast.error(language === 'bn' ? 'লক্ষ্য সংরক্ষণ করতে ব্যর্থ' : 'Failed to save goals');
       console.error(error);
     } else {
-      toast.success('Goals saved!');
+      toast.success(language === 'bn' ? 'লক্ষ্য সংরক্ষিত!' : 'Goals saved!');
     }
     setSaving(false);
   }
@@ -177,6 +240,10 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
 
   const minutesGoalMet = todayDuration >= parseInt(targetMinutes);
   const caloriesGoalMet = todayCalories >= parseInt(targetCalories);
+  
+  const displaySuggestion = bilingualSuggestion 
+    ? (language === 'bn' ? bilingualSuggestion.bn : bilingualSuggestion.en)
+    : null;
 
   if (loading) {
     return (
@@ -193,23 +260,44 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
       <CardHeader className="pb-2">
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
-          Daily Exercise Goals
+          {language === 'bn' ? 'দৈনিক ব্যায়াম লক্ষ্য' : 'Daily Exercise Goals'}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* AI Daily Suggestion */}
+        {/* AI Daily Suggestion - Bilingual */}
         <div className="p-3 rounded-lg bg-golden/10 border border-golden/20">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-4 h-4 text-golden" />
-            <span className="text-sm font-medium text-foreground">Today's Suggestion</span>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-golden" />
+              <span className="text-sm font-medium text-foreground">
+                {language === 'bn' ? 'আজকের পরামর্শ' : "Today's Suggestion"}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fetchSuggestion(profile?.fitness_goal, true)}
+              disabled={loadingSuggestion}
+              className="h-6 w-6"
+            >
+              {loadingSuggestion ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+            </Button>
           </div>
-          {loadingSuggestion ? (
+          {loadingSuggestion && !displaySuggestion ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Getting suggestion...
+              {language === 'bn' ? 'পরামর্শ লোড হচ্ছে...' : 'Getting suggestion...'}
             </div>
           ) : (
-            <p className="text-sm text-foreground">{suggestion || 'Try 20 minutes of brisk walking today!'}</p>
+            <p className="text-sm text-foreground">
+              {displaySuggestion || (language === 'bn' 
+                ? 'আজ ২০ মিনিট হাঁটার চেষ্টা করুন!' 
+                : 'Try 20 minutes of brisk walking today!')}
+            </p>
           )}
         </div>
 
@@ -218,7 +306,7 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
           <div className="space-y-2">
             <Label htmlFor="target-minutes" className="flex items-center gap-2">
               <Timer className="w-4 h-4 text-primary" />
-              Target Minutes
+              {language === 'bn' ? 'লক্ষ্য মিনিট' : 'Target Minutes'}
             </Label>
             <Input
               id="target-minutes"
@@ -233,7 +321,7 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
           <div className="space-y-2">
             <Label htmlFor="target-calories" className="flex items-center gap-2">
               <Flame className="w-4 h-4 text-terracotta" />
-              Target Calories
+              {language === 'bn' ? 'লক্ষ্য ক্যালোরি' : 'Target Calories'}
             </Label>
             <Input
               id="target-calories"
@@ -251,9 +339,11 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Exercise Duration</span>
+              <span className="text-muted-foreground">
+                {language === 'bn' ? 'ব্যায়ামের সময়কাল' : 'Exercise Duration'}
+              </span>
               <span className={minutesGoalMet ? 'text-primary font-medium' : 'text-foreground'}>
-                {todayDuration} / {targetMinutes} min
+                {todayDuration} / {targetMinutes} {language === 'bn' ? 'মিনিট' : 'min'}
                 {minutesGoalMet && ' ✓'}
               </span>
             </div>
@@ -262,9 +352,11 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
           
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Calories Burned</span>
+              <span className="text-muted-foreground">
+                {language === 'bn' ? 'ক্যালোরি পোড়ানো' : 'Calories Burned'}
+              </span>
               <span className={caloriesGoalMet ? 'text-primary font-medium' : 'text-foreground'}>
-                {todayCalories} / {targetCalories} kcal
+                {todayCalories} / {targetCalories} {language === 'bn' ? 'কিলোক্যালোরি' : 'kcal'}
                 {caloriesGoalMet && ' ✓'}
               </span>
             </div>
@@ -277,12 +369,12 @@ export default function ExerciseGoals({ todayDuration, todayCalories }: Exercise
           {saving ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Saving...
+              {language === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}
             </>
           ) : (
             <>
               <Save className="w-4 h-4 mr-2" />
-              Save Goals
+              {language === 'bn' ? 'লক্ষ্য সংরক্ষণ করুন' : 'Save Goals'}
             </>
           )}
         </Button>

@@ -75,11 +75,18 @@ serve(async (req) => {
       }
     }
 
+    // Check for OpenAI API key in secrets first (priority)
+    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
+    
     let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
     let apiKey = Deno.env.get("LOVABLE_API_KEY");
     let model = "google/gemini-3-flash-preview";
 
-    if (aiProvider === "openai" && customApiKey) {
+    if (openaiKey) {
+      apiUrl = "https://api.openai.com/v1/chat/completions";
+      apiKey = openaiKey;
+      model = "gpt-4o-mini";
+    } else if (aiProvider === "openai" && customApiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = customApiKey;
       model = "gpt-4o-mini";
@@ -93,9 +100,9 @@ serve(async (req) => {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Parsing exercise with provider: ${aiProvider}, user weight: ${weightKg}kg`);
+    console.log(`Parsing exercise with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, user weight: ${weightKg}kg`);
 
-    const systemPrompt = `You are a fitness data extraction AI. Parse the user's exercise description and extract individual exercises with estimates.
+    const systemPrompt = `You are a fitness data extraction AI for Bangladesh users. Parse the user's exercise description and extract individual exercises with estimates.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text.
 
@@ -108,20 +115,22 @@ For each exercise, estimate:
 - Exercise type: "cardio", "strength", "flexibility", "sports", or "other"
 
 Common MET values (calories = MET × weight_kg × duration_hours):
-- Walking (moderate): 3.5 MET
-- Running (6 mph): 10 MET
-- Cycling (moderate): 8 MET
-- Swimming: 7 MET
-- Yoga: 3 MET
-- Weight training: 6 MET
+- হাঁটা/Walking (moderate): 3.5 MET
+- দৌড়ানো/Running (6 mph): 10 MET
+- সাইকেল চালানো/Cycling (moderate): 8 MET
+- সাঁতার কাটা/Swimming: 7 MET
+- যোগব্যায়াম/Yoga: 3 MET
+- ওজন প্রশিক্ষণ/Weight training: 6 MET
 - HIIT: 12 MET
-- Dancing: 5 MET
-- Skipping/Jump rope: 11 MET
-- Cricket: 5 MET
-- Badminton: 5.5 MET
-- Push-ups: 8 MET
-- Squats: 5 MET
-- Planks: 4 MET
+- নাচ/Dancing: 5 MET
+- দড়ি লাফ/Jump rope: 11 MET
+- ক্রিকেট/Cricket: 5 MET
+- ব্যাডমিন্টন/Badminton: 5.5 MET
+- ফুটবল/Football: 7 MET
+- পুশ-আপ/Push-ups: 8 MET
+- স্কোয়াট/Squats: 5 MET
+- প্ল্যাংক/Planks: 4 MET
+- সিঁড়ি ওঠা/Stair climbing: 8 MET
 
 Return format (pure JSON array):
 [

@@ -304,6 +304,42 @@ export type Database = {
         }
         Relationships: []
       }
+      workout_plans: {
+        Row: {
+          created_at: string
+          generated_bn: string | null
+          generated_en: string | null
+          id: string
+          missed_count: number | null
+          plan_date: string
+          updated_at: string
+          user_id: string
+          workouts: Json
+        }
+        Insert: {
+          created_at?: string
+          generated_bn?: string | null
+          generated_en?: string | null
+          id?: string
+          missed_count?: number | null
+          plan_date: string
+          updated_at?: string
+          user_id: string
+          workouts?: Json
+        }
+        Update: {
+          created_at?: string
+          generated_bn?: string | null
+          generated_en?: string | null
+          id?: string
+          missed_count?: number | null
+          plan_date?: string
+          updated_at?: string
+          user_id?: string
+          workouts?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
