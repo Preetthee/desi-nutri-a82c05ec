@@ -155,19 +155,45 @@ Just the suggestions, no extra text.`
           if (done) break;
           
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const json = JSON.parse(line.slice(6));
-                const chunk = json.choices?.[0]?.delta?.content;
-                if (chunk) {
-                  content += chunk;
-                }
-              } catch {}
+          
+          // Process line by line
+          let newlineIndex: number;
+          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+            let line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (line.startsWith(':') || line.trim() === '') continue;
+            if (!line.startsWith('data: ')) continue;
+            
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') break;
+            
+            try {
+              const json = JSON.parse(jsonStr);
+              const chunk = json.choices?.[0]?.delta?.content;
+              if (chunk) content += chunk;
+            } catch {
+              buffer = line + '\n' + buffer;
+              break;
             }
+          }
+        }
+        
+        // Final flush
+        if (buffer.trim()) {
+          for (let raw of buffer.split('\n')) {
+            if (!raw) continue;
+            if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+            if (raw.startsWith(':') || raw.trim() === '') continue;
+            if (!raw.startsWith('data: ')) continue;
+            const jsonStr = raw.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+            try {
+              const json = JSON.parse(jsonStr);
+              const chunk = json.choices?.[0]?.delta?.content;
+              if (chunk) content += chunk;
+            } catch { /* ignore */ }
           }
         }
       }
@@ -260,7 +286,7 @@ Just the suggestions, no extra text.`
       <CardHeader className="pb-2">
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
-          {language === 'bn' ? 'দৈনিক ব্যায়াম লক্ষ্য' : 'Daily Exercise Goals'}
+          {t('exercise.dailyGoals')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -270,7 +296,7 @@ Just the suggestions, no extra text.`
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-golden" />
               <span className="text-sm font-medium text-foreground">
-                {language === 'bn' ? 'আজকের পরামর্শ' : "Today's Suggestion"}
+                {t('exercise.todaySuggestion')}
               </span>
             </div>
             <Button
@@ -290,7 +316,7 @@ Just the suggestions, no extra text.`
           {loadingSuggestion && !displaySuggestion ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
-              {language === 'bn' ? 'পরামর্শ লোড হচ্ছে...' : 'Getting suggestion...'}
+              {t('common.gettingTip')}
             </div>
           ) : (
             <p className="text-sm text-foreground">
@@ -306,7 +332,7 @@ Just the suggestions, no extra text.`
           <div className="space-y-2">
             <Label htmlFor="target-minutes" className="flex items-center gap-2">
               <Timer className="w-4 h-4 text-primary" />
-              {language === 'bn' ? 'লক্ষ্য মিনিট' : 'Target Minutes'}
+              {t('exercise.targetMinutes')}
             </Label>
             <Input
               id="target-minutes"
@@ -321,7 +347,7 @@ Just the suggestions, no extra text.`
           <div className="space-y-2">
             <Label htmlFor="target-calories" className="flex items-center gap-2">
               <Flame className="w-4 h-4 text-terracotta" />
-              {language === 'bn' ? 'লক্ষ্য ক্যালোরি' : 'Target Calories'}
+              {t('exercise.targetCalories')}
             </Label>
             <Input
               id="target-calories"
@@ -340,10 +366,10 @@ Just the suggestions, no extra text.`
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {language === 'bn' ? 'ব্যায়ামের সময়কাল' : 'Exercise Duration'}
+                {t('exercise.exerciseDuration')}
               </span>
               <span className={minutesGoalMet ? 'text-primary font-medium' : 'text-foreground'}>
-                {todayDuration} / {targetMinutes} {language === 'bn' ? 'মিনিট' : 'min'}
+                {todayDuration} / {targetMinutes} {t('common.min')}
                 {minutesGoalMet && ' ✓'}
               </span>
             </div>
@@ -353,10 +379,10 @@ Just the suggestions, no extra text.`
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {language === 'bn' ? 'ক্যালোরি পোড়ানো' : 'Calories Burned'}
+                {t('exercise.caloriesBurnedProgress')}
               </span>
               <span className={caloriesGoalMet ? 'text-primary font-medium' : 'text-foreground'}>
-                {todayCalories} / {targetCalories} {language === 'bn' ? 'কিলোক্যালোরি' : 'kcal'}
+                {todayCalories} / {targetCalories} {t('common.kcal')}
                 {caloriesGoalMet && ' ✓'}
               </span>
             </div>
@@ -369,12 +395,12 @@ Just the suggestions, no extra text.`
           {saving ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              {language === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}
+              {t('common.saving')}
             </>
           ) : (
             <>
               <Save className="w-4 h-4 mr-2" />
-              {language === 'bn' ? 'লক্ষ্য সংরক্ষণ করুন' : 'Save Goals'}
+              {t('exercise.saveGoals')}
             </>
           )}
         </Button>

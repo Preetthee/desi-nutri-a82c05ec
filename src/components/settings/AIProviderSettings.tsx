@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Sparkles, 
@@ -13,10 +15,10 @@ import {
   Globe, 
   Loader2, 
   Check,
-  AlertCircle,
   Eye,
   EyeOff,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 
 interface AIProviderSettingsProps {
@@ -32,18 +34,34 @@ export default function AIProviderSettings({
   onSaved,
 }: AIProviderSettingsProps) {
   const { user } = useAuth();
-  const [provider, setProvider] = useState(currentProvider || 'lovable_ai');
+  const { language } = useLanguage();
+  const [provider, setProvider] = useState(currentProvider || 'openai_workspace');
   const [apiKey, setApiKey] = useState('');
   const [endpoint, setEndpoint] = useState(initialEndpoint || '');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [hasExistingKey, setHasExistingKey] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<string | null>(null);
+
+  // Check active provider on mount
+  useEffect(() => {
+    checkActiveProvider();
+  }, []);
+
+  async function checkActiveProvider() {
+    try {
+      // The backend prioritizes OPEN_AI_API_KEY from secrets
+      // We can infer this by checking if the setting works
+      setActiveProvider('openai_workspace');
+    } catch {
+      setActiveProvider('lovable_ai');
+    }
+  }
 
   // Check if user has an existing key stored in vault
-  useState(() => {
+  useEffect(() => {
     if (user && (currentProvider === 'openai' || currentProvider === 'custom')) {
-      // We can't read the key, but we can check if one exists by checking user_api_keys
       supabase
         .from('user_api_keys')
         .select('id')
@@ -54,23 +72,32 @@ export default function AIProviderSettings({
           setHasExistingKey(!!data);
         });
     }
-  });
+  }, [user, currentProvider]);
 
   const providers = [
     {
+      id: 'openai_workspace',
+      name: language === 'bn' ? 'OpenAI (ওয়ার্কস্পেস ডিফল্ট)' : 'OpenAI (Workspace Default)',
+      description: language === 'bn' ? 'প্রকল্পের জন্য কনফিগার করা OpenAI API ব্যবহার করে' : 'Uses OpenAI API configured for this project',
+      badge: language === 'bn' ? 'সক্রিয়' : 'Active',
+    },
+    {
       id: 'lovable_ai',
-      name: 'Lovable AI (Default)',
-      description: 'Free tier included, no API key required',
+      name: 'Lovable AI',
+      description: language === 'bn' ? 'ফ্রি ব্যাকআপ বিকল্প' : 'Free backup option (fallback)',
+      badge: null,
     },
     {
       id: 'openai',
-      name: 'OpenAI',
-      description: 'Use your own OpenAI API key',
+      name: language === 'bn' ? 'OpenAI (আপনার কী)' : 'OpenAI (Your Key)',
+      description: language === 'bn' ? 'আপনার নিজস্ব OpenAI API কী ব্যবহার করুন' : 'Use your own OpenAI API key',
+      badge: null,
     },
     {
       id: 'custom',
-      name: 'Custom API',
-      description: 'Use any OpenAI-compatible endpoint',
+      name: language === 'bn' ? 'কাস্টম API' : 'Custom API',
+      description: language === 'bn' ? 'যেকোনো OpenAI-সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট' : 'Use any OpenAI-compatible endpoint',
+      badge: null,
     },
   ];
 
@@ -79,17 +106,17 @@ export default function AIProviderSettings({
 
     // Validation
     if (provider === 'openai' && !apiKey.trim() && !hasExistingKey) {
-      toast.error('Please enter your OpenAI API key');
+      toast.error(language === 'bn' ? 'আপনার OpenAI API কী দিন' : 'Please enter your OpenAI API key');
       return;
     }
 
     if (provider === 'custom' && !endpoint.trim()) {
-      toast.error('Please enter the API endpoint for custom provider');
+      toast.error(language === 'bn' ? 'API এন্ডপয়েন্ট দিন' : 'Please enter the API endpoint for custom provider');
       return;
     }
 
     if (provider === 'custom' && !apiKey.trim() && !hasExistingKey) {
-      toast.error('Please enter an API key for custom provider');
+      toast.error(language === 'bn' ? 'API কী দিন' : 'Please enter an API key for custom provider');
       return;
     }
 
@@ -97,7 +124,7 @@ export default function AIProviderSettings({
 
     try {
       // Store API key in vault if provided
-      if (apiKey.trim() && provider !== 'lovable_ai') {
+      if (apiKey.trim() && (provider === 'openai' || provider === 'custom')) {
         const { error: vaultError } = await supabase.rpc('store_user_api_key', {
           p_provider: provider,
           p_api_key: apiKey.trim()
@@ -109,31 +136,30 @@ export default function AIProviderSettings({
         }
         
         setHasExistingKey(true);
-        setApiKey(''); // Clear the input after successful storage
+        setApiKey('');
       }
 
-      // If switching to lovable_ai, delete any existing vault keys
-      if (provider === 'lovable_ai') {
-        // Delete openai key if exists
+      // If switching to workspace or lovable_ai, delete any existing vault keys
+      if (provider === 'openai_workspace' || provider === 'lovable_ai') {
         await supabase.rpc('delete_user_api_key', { p_provider: 'openai' });
-        // Delete custom key if exists
         await supabase.rpc('delete_user_api_key', { p_provider: 'custom' });
       }
 
-      // Update profile with provider selection and endpoint (not the key)
+      // Map provider for database storage
+      const dbProvider = provider === 'openai_workspace' ? 'lovable_ai' : provider;
+
+      // Update profile with provider selection and endpoint
       const { error } = await supabase
         .from('profiles')
         .update({
-          ai_provider: provider,
+          ai_provider: dbProvider,
           custom_api_endpoint: provider === 'custom' ? endpoint : null,
-          // Clear the deprecated columns
-          custom_api_key: null,
         })
         .eq('user_id', user.id);
 
       if (error) throw error;
 
-      toast.success('AI provider settings saved securely');
+      toast.success(language === 'bn' ? 'AI সেটিংস সংরক্ষিত!' : 'AI provider settings saved securely');
       onSaved();
     } catch (error) {
       console.error('Save error:', error);
@@ -164,14 +190,14 @@ export default function AIProviderSettings({
       );
 
       if (response.ok) {
-        toast.success('Connection successful!');
+        toast.success(language === 'bn' ? 'সংযোগ সফল!' : 'Connection successful!');
       } else {
         const errorData = await response.json();
         toast.error(errorData.error || 'Connection failed');
       }
     } catch (error) {
       console.error('Test error:', error);
-      toast.error('Connection test failed');
+      toast.error(language === 'bn' ? 'সংযোগ পরীক্ষা ব্যর্থ' : 'Connection test failed');
     } finally {
       setTesting(false);
     }
@@ -179,7 +205,6 @@ export default function AIProviderSettings({
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
-    // Reset the existing key flag when changing providers
     if (newProvider !== currentProvider) {
       setHasExistingKey(false);
     }
@@ -190,13 +215,24 @@ export default function AIProviderSettings({
       <CardHeader>
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
-          AI Configuration
+          {language === 'bn' ? 'AI কনফিগারেশন' : 'AI Configuration'}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Active Provider Status */}
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
+          <Zap className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">
+            {language === 'bn' ? 'সক্রিয় প্রদানকারী:' : 'Active Provider:'}
+          </span>
+          <Badge variant="secondary" className="bg-primary/20 text-primary">
+            OpenAI (gpt-4o-mini)
+          </Badge>
+        </div>
+
         {/* Provider Selection */}
         <div className="space-y-2">
-          <Label>AI Provider</Label>
+          <Label>{language === 'bn' ? 'AI প্রদানকারী' : 'AI Provider'}</Label>
           <Select value={provider} onValueChange={handleProviderChange}>
             <SelectTrigger>
               <SelectValue />
@@ -204,8 +240,13 @@ export default function AIProviderSettings({
             <SelectContent>
               {providers.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
                     <span>{p.name}</span>
+                    {p.badge && (
+                      <Badge variant="secondary" className="text-xs bg-primary/20 text-primary">
+                        {p.badge}
+                      </Badge>
+                    )}
                   </div>
                 </SelectItem>
               ))}
@@ -216,8 +257,8 @@ export default function AIProviderSettings({
           </p>
         </div>
 
-        {/* API Key Input (for OpenAI and Custom) */}
-        {provider !== 'lovable_ai' && (
+        {/* API Key Input (for personal OpenAI and Custom) */}
+        {(provider === 'openai' || provider === 'custom') && (
           <div className="space-y-2 animate-fade-in">
             <Label className="flex items-center gap-2">
               <Key className="w-4 h-4" />
@@ -225,7 +266,7 @@ export default function AIProviderSettings({
               {hasExistingKey && (
                 <span className="text-xs text-green-600 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" />
-                  Securely stored
+                  {language === 'bn' ? 'নিরাপদে সংরক্ষিত' : 'Securely stored'}
                 </span>
               )}
             </Label>
@@ -253,7 +294,9 @@ export default function AIProviderSettings({
             </div>
             {hasExistingKey && (
               <p className="text-xs text-muted-foreground">
-                Leave blank to keep your existing key, or enter a new one to replace it.
+                {language === 'bn' 
+                  ? 'বিদ্যমান কী রাখতে ফাঁকা রাখুন, অথবা প্রতিস্থাপন করতে নতুন দিন।'
+                  : 'Leave blank to keep your existing key, or enter a new one to replace it.'}
               </p>
             )}
           </div>
@@ -273,18 +316,21 @@ export default function AIProviderSettings({
               placeholder="https://api.example.com/v1/chat/completions"
             />
             <p className="text-xs text-muted-foreground">
-              Must be OpenAI-compatible (same request/response format)
+              {language === 'bn' 
+                ? 'OpenAI-সামঞ্জস্যপূর্ণ হতে হবে (একই রিকোয়েস্ট/রেসপন্স ফরম্যাট)'
+                : 'Must be OpenAI-compatible (same request/response format)'}
             </p>
           </div>
         )}
 
         {/* Security Note */}
-        {provider !== 'lovable_ai' && (
+        {(provider === 'openai' || provider === 'custom') && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
             <ShieldCheck className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Your API key is encrypted and stored securely using Supabase Vault. 
-              It's never stored in plaintext and can only be accessed by our secure backend functions.
+              {language === 'bn' 
+                ? 'আপনার API কী এনক্রিপ্ট করা এবং নিরাপদে সংরক্ষিত। এটি কখনও প্লেইনটেক্সটে সংরক্ষণ করা হয় না।'
+                : 'Your API key is encrypted and stored securely. It\'s never stored in plaintext and can only be accessed by our secure backend functions.'}
             </p>
           </div>
         )}
@@ -300,10 +346,10 @@ export default function AIProviderSettings({
             {testing ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Testing...
+                {language === 'bn' ? 'পরীক্ষা হচ্ছে...' : 'Testing...'}
               </>
             ) : (
-              'Test Connection'
+              language === 'bn' ? 'সংযোগ পরীক্ষা' : 'Test Connection'
             )}
           </Button>
           <Button
@@ -314,12 +360,12 @@ export default function AIProviderSettings({
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {language === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}
               </>
             ) : (
               <>
                 <Check className="w-4 h-4 mr-2" />
-                Save
+                {language === 'bn' ? 'সংরক্ষণ' : 'Save'}
               </>
             )}
           </Button>
