@@ -21,6 +21,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import ImageUploadButton from '@/components/shared/ImageUploadButton';
+import VoiceInputButton from '@/components/shared/VoiceInputButton';
 
 interface ParsedFood {
   food_name: string;
@@ -49,6 +50,10 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
   const [selectedMealType, setSelectedMealType] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const handleVoiceTranscript = (text: string) => {
+    setDescription(prev => prev ? `${prev} ${text}` : text);
+  };
 
   const mealTypes = [
     { id: 'breakfast', label: t('tracker.breakfast'), icon: Coffee },
@@ -193,13 +198,19 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
           </span>
         </div>
 
-        <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe what you ate... e.g., 'Had 2 rotis with chicken curry and salad for lunch'"
-          className="min-h-[80px] resize-none bg-background/80"
-          disabled={parsing || saving}
-        />
+        <div className="flex gap-2 items-start">
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe what you ate... e.g., 'Had 2 rotis with chicken curry and salad for lunch'"
+            className="min-h-[80px] resize-none bg-background/80 flex-1"
+            disabled={parsing || saving}
+          />
+          <VoiceInputButton
+            onTranscript={handleVoiceTranscript}
+            disabled={parsing || saving}
+          />
+        </div>
 
         {!showParsed && (
           <div className="space-y-3">
