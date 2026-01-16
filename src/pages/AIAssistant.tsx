@@ -22,6 +22,7 @@ import {
   ImagePlus
 } from 'lucide-react';
 import ImageUploadButton from '@/components/shared/ImageUploadButton';
+import VoiceInputButton from '@/components/shared/VoiceInputButton';
 
 interface MessageContent {
   type: 'text' | 'image_url';
@@ -54,6 +55,10 @@ export default function AIAssistant() {
   const [profile, setProfile] = useState<any>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleVoiceTranscript = (text: string) => {
+    setInput(prev => prev ? `${prev} ${text}` : text);
+  };
 
   useEffect(() => {
     if (user) {
@@ -507,6 +512,10 @@ export default function AIAssistant() {
               selectedImage={null}
               onImageSelect={setSelectedImage}
               onImageClear={() => setSelectedImage(null)}
+              disabled={loading}
+            />
+            <VoiceInputButton
+              onTranscript={handleVoiceTranscript}
               disabled={loading}
             />
             <Input 

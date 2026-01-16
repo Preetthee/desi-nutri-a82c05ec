@@ -18,10 +18,9 @@ import {
   Heart,
   Activity,
   Trophy,
-  ChevronUp,
-  ImagePlus
+  ChevronUp
 } from 'lucide-react';
-import ImageUploadButton from '@/components/shared/ImageUploadButton';
+import VoiceInputButton from '@/components/shared/VoiceInputButton';
 
 interface ParsedExercise {
   exercise_name: string;
@@ -45,7 +44,10 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
   const [parsedExercises, setParsedExercises] = useState<ParsedExercise[]>([]);
   const [showParsed, setShowParsed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const handleVoiceTranscript = (text: string) => {
+    setDescription(prev => prev ? `${prev} ${text}` : text);
+  };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -66,7 +68,7 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
   };
 
   const handleParse = async () => {
-    if ((!description.trim() && !selectedImage) || !session) return;
+    if (!description.trim() || !session) return;
 
     setParsing(true);
     setParsedExercises([]);
@@ -82,7 +84,6 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
           },
           body: JSON.stringify({
             description: description.trim(),
-            image: selectedImage,
           }),
         }
       );
@@ -228,7 +229,6 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
 
       toast.success(`Logged ${selectedExercises.length} exercise${selectedExercises.length > 1 ? 's' : ''}`);
       setDescription('');
-      setSelectedImage(null);
       setParsedExercises([]);
       setShowParsed(false);
       onExerciseAdded();
@@ -266,26 +266,25 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
           </span>
         </div>
 
-        <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe your workout... e.g., 'Morning jog for 30 mins, then 20 pushups and 15 squats'"
-          className="min-h-[80px] resize-none bg-background/80"
-          disabled={parsing || saving}
-        />
+        <div className="flex gap-2 items-start">
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe your workout... e.g., 'Morning jog for 30 mins, then 20 pushups and 15 squats'"
+            className="min-h-[80px] resize-none bg-background/80 flex-1"
+            disabled={parsing || saving}
+          />
+          <VoiceInputButton
+            onTranscript={handleVoiceTranscript}
+            disabled={parsing || saving}
+          />
+        </div>
 
         {!showParsed && (
           <div className="flex gap-2 items-center">
-            <ImageUploadButton
-              selectedImage={selectedImage}
-              onImageSelect={setSelectedImage}
-              onImageClear={() => setSelectedImage(null)}
-              disabled={parsing || saving}
-            />
-            
             <Button
               onClick={handleParse}
-              disabled={(!description.trim() && !selectedImage) || parsing}
+              disabled={!description.trim() || parsing}
               className="flex-1 gap-2"
             >
               {parsing ? (
@@ -387,7 +386,6 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
                   onClick={() => {
                     setParsedExercises([]);
                     setShowParsed(false);
-                    setSelectedImage(null);
                   }}
                 >
                   <X className="w-4 h-4 mr-1" />
