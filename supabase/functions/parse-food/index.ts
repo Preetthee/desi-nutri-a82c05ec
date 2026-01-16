@@ -6,6 +6,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const SUPPORTED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
+function validateImageUrl(url: string): { ok: true } | { ok: false; error: string } {
+  if (!url || typeof url !== "string") {
+    return { ok: false, error: "Invalid image payload." };
+  }
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return { ok: true };
+  }
+
+  const m = url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (!m) {
+    return { ok: false, error: "Unsupported image format. Please upload JPG/PNG/WEBP/GIF." };
+  }
+
+  const mime = m[1];
+  if (!SUPPORTED_IMAGE_MIME.includes(mime as any)) {
+    return { ok: false, error: "Unsupported image type. Please upload JPG/PNG/WEBP/GIF (not HEIC/SVG)." };
+  }
+
+  return { ok: true };
+}
+
 interface ParsedFood {
   food_name: string;
   quantity: number;
@@ -33,39 +57,50 @@ serve(async (req) => {
       });
     }
 
+    if (image) {
+      const v = validateImageUrl(String(image));
+      if (!v.ok) {
+        return new Response(JSON.stringify({ error: v.error }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Get user's AI provider settings
     const authHeader = req.headers.get("authorization");
     let aiProvider = "lovable_ai";
-    let customApiKey = null;
-    let customEndpoint = null;
+    let customApiKey: string | null = null;
+    let customEndpoint: string | null = null;
 
     if (authHeader) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
-      
+
       const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser(token);
+
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("ai_provider, custom_api_endpoint")
           .eq("user_id", user.id)
           .maybeSingle();
-        
+
         if (profile) {
           aiProvider = profile.ai_provider || "lovable_ai";
           customEndpoint = profile.custom_api_endpoint;
-          
+
           // Get API key from vault using secure function
           if (aiProvider === "openai" || aiProvider === "custom") {
-            const { data: vaultKey, error: vaultError } = await supabase
-              .rpc("get_user_api_key", { 
-                p_user_id: user.id, 
-                p_provider: aiProvider 
-              });
-            
+            const { data: vaultKey, error: vaultError } = await supabase.rpc("get_user_api_key", {
+              p_user_id: user.id,
+              p_provider: aiProvider,
+            });
+
             if (vaultError) {
               console.error("Error retrieving API key from vault:", vaultError);
             } else {
@@ -78,7 +113,7 @@ serve(async (req) => {
 
     // Check for OpenAI API key in secrets first (priority)
     const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
-    
+
     let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
     let apiKey = Deno.env.get("LOVABLE_API_KEY");
     let model = "google/gemini-3-flash-preview";
@@ -97,7 +132,7 @@ serve(async (req) => {
       apiKey = customApiKey;
       model = "gpt-4o-mini";
     } else if (image) {
-      // For Lovable AI with images, use gemini which supports vision
+      // Lovable AI with images (Gemini)
       model = "google/gemini-2.5-flash";
     }
 
@@ -105,31 +140,12 @@ serve(async (req) => {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Parsing food with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, hasImage: ${!!image}`);
-
     const systemPrompt = `You are a nutrition data extraction AI specializing in Bangladeshi cuisine. 
 Parse the user's food description (or analyze the food image) and extract individual food items with nutritional estimates.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text.
 
 For each food item, estimate realistic nutritional values based on typical serving sizes for Bangladeshi foods.
-
-Common reference values for Bangladeshi foods:
-- ভাত/Rice (1 cup cooked): ~200 cal, 4g protein, 45g carbs, 0.5g fat
-- রুটি/Roti (1 piece): ~80 cal, 3g protein, 15g carbs, 1g fat
-- পরোটা/Paratha (1 piece): ~150 cal, 4g protein, 20g carbs, 7g fat
-- ডাল/Dal (1 cup): ~150 cal, 9g protein, 25g carbs, 3g fat
-- মুরগির মাংস/Chicken curry (1 cup): ~280 cal, 25g protein, 10g carbs, 15g fat
-- মাছের ঝোল/Fish curry (1 cup): ~200 cal, 22g protein, 8g carbs, 10g fat
-- ইলিশ মাছ/Hilsa (100g): ~310 cal, 22g protein, 0g carbs, 25g fat
-- ডিম/Egg (1 whole): ~70 cal, 6g protein, 0.5g carbs, 5g fat
-- বিরিয়ানি/Biryani (1 plate): ~400 cal, 15g protein, 55g carbs, 15g fat
-- খিচুড়ি/Khichuri (1 cup): ~250 cal, 8g protein, 40g carbs, 6g fat
-- ভর্তা/Bhorta (2 tbsp): ~80 cal, 2g protein, 5g carbs, 6g fat
-- শুটকি/Shutki (50g): ~150 cal, 30g protein, 0g carbs, 3g fat
-- সিঙ্গারা/Singara (1 piece): ~120 cal, 3g protein, 15g carbs, 6g fat
-- সমুচা/Samosa (1 piece): ~100 cal, 2g protein, 12g carbs, 5g fat
-- মিষ্টি/Mishti (1 piece): ~150 cal, 3g protein, 25g carbs, 5g fat
 
 Meal type should be one of: "breakfast", "lunch", "dinner", "snack" - infer from context or time mentioned.
 
@@ -152,11 +168,20 @@ Return format (pure JSON array):
     let userContent: any;
     if (image) {
       userContent = [
-        { type: "text", text: `${description ? `Parse this food description: "${description}"` : 'Analyze this food image and identify the foods shown.'}${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}` },
-        { type: "image_url", image_url: { url: image } }
+        {
+          type: "text",
+          text: `${
+            description
+              ? `Parse this food description: "${description}"`
+              : "Analyze this food image and identify the foods shown."
+          }${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}`,
+        },
+        { type: "image_url", image_url: { url: image } },
       ];
     } else {
-      userContent = `Parse this food description: "${description}"${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}`;
+      userContent = `Parse this food description: "${description}"${
+        defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""
+      }`;
     }
 
     const response = await fetch(apiUrl, {
@@ -187,9 +212,27 @@ Return format (pure JSON array):
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error("AI provider error:", response.status, errorText);
+
+      let friendly = "Failed to parse food.";
+      try {
+        const parsed = JSON.parse(errorText);
+        const code = parsed?.error?.code;
+        if (code === "image_parse_error") {
+          friendly = "Unsupported image. Please upload JPG/PNG/WEBP/GIF (under 4MB).";
+        } else if (parsed?.error?.message) {
+          friendly = parsed.error.message;
+        }
+      } catch {
+        // ignore
+      }
+
+      return new Response(JSON.stringify({ error: friendly }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
@@ -199,10 +242,8 @@ Return format (pure JSON array):
       throw new Error("No response from AI");
     }
 
-    console.log("AI response:", content);
-
     // Parse the JSON response - handle markdown code blocks
-    let cleanedContent = content.trim();
+    let cleanedContent = String(content).trim();
     if (cleanedContent.startsWith("```json")) {
       cleanedContent = cleanedContent.slice(7);
     } else if (cleanedContent.startsWith("```")) {
@@ -223,15 +264,15 @@ Return format (pure JSON array):
 
     // Validate and sanitize the parsed data
     const validatedFoods = parsedFoods.map((food) => ({
-      food_name: String(food.food_name || "Unknown food"),
-      quantity: Number(food.quantity) || 1,
-      unit: String(food.unit || "serving"),
-      calories: Math.round(Number(food.calories) || 0),
-      protein_g: Math.round(Number(food.protein_g) || 0),
-      carbs_g: Math.round(Number(food.carbs_g) || 0),
-      fat_g: Math.round(Number(food.fat_g) || 0),
-      fiber_g: Math.round(Number(food.fiber_g) || 0),
-      meal_type: food.meal_type || defaultMealType || null,
+      food_name: String((food as any).food_name || "Unknown food"),
+      quantity: Number((food as any).quantity) || 1,
+      unit: String((food as any).unit || "serving"),
+      calories: Math.round(Number((food as any).calories) || 0),
+      protein_g: Math.round(Number((food as any).protein_g) || 0),
+      carbs_g: Math.round(Number((food as any).carbs_g) || 0),
+      fat_g: Math.round(Number((food as any).fat_g) || 0),
+      fiber_g: Math.round(Number((food as any).fiber_g) || 0),
+      meal_type: (food as any).meal_type || defaultMealType || null,
     }));
 
     return new Response(JSON.stringify({ foods: validatedFoods }), {
