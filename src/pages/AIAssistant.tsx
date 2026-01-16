@@ -238,12 +238,23 @@ export default function AIAssistant() {
       );
 
       if (!response.ok) {
+        let backendMessage = '';
+        try {
+          const err = await response.json();
+          backendMessage = err?.error || '';
+        } catch {
+          // ignore
+        }
+
         if (response.status === 429) {
           toast.error('Rate limit exceeded. Please try again later.');
         } else if (response.status === 402) {
           toast.error('AI credits exhausted. Please add credits.');
+        } else {
+          toast.error(backendMessage || 'AI request failed');
         }
-        throw new Error('AI request failed');
+
+        throw new Error(backendMessage || 'AI request failed');
       }
 
       const reader = response.body?.getReader();
