@@ -4,7 +4,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
 import AIExerciseInput from '@/components/exercise/AIExerciseInput';
-import ExerciseGoals from '@/components/exercise/ExerciseGoals';
 import WorkoutChecklist from '@/components/exercise/WorkoutChecklist';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +35,7 @@ export default function Exercise() {
   const { t } = useLanguage();
   const [logs, setLogs] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workoutPlanRefreshKey, setWorkoutPlanRefreshKey] = useState(0);
 
   const exerciseTypes = [
     { id: 'cardio', label: t('exercise.cardio'), icon: Heart },
@@ -73,6 +73,13 @@ export default function Exercise() {
     }
   }
 
+  // Callback when exercise is added - refresh logs and workout checklist
+  const handleExerciseAdded = () => {
+    fetchLogs();
+    // Trigger workout checklist refresh
+    setWorkoutPlanRefreshKey(prev => prev + 1);
+  };
+
   const totalCalories = logs.reduce((sum, log) => sum + (Number(log.calories_burned) || 0), 0);
   const totalDuration = logs.reduce((sum, log) => sum + (log.duration_minutes || 0), 0);
 
@@ -99,14 +106,11 @@ export default function Exercise() {
           <p className="text-muted-foreground mt-1">{t('common.today')}</p>
         </div>
 
+        {/* AI Exercise Input - Primary way to log (moved to top) */}
+        <AIExerciseInput onExerciseAdded={handleExerciseAdded} />
+
         {/* AI Workout Checklist - Daily plan with bilingual support */}
-        <WorkoutChecklist />
-
-        {/* Exercise Goals - Always visible */}
-        <ExerciseGoals todayDuration={totalDuration} todayCalories={totalCalories} />
-
-        {/* AI Exercise Input - Primary way to log */}
-        <AIExerciseInput onExerciseAdded={fetchLogs} />
+        <WorkoutChecklist key={workoutPlanRefreshKey} />
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-4 animate-slide-up">

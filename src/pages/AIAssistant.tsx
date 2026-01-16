@@ -18,13 +18,21 @@ import {
   AlertCircle,
   Menu,
   X,
-  Bot
+  Bot,
+  ImagePlus
 } from 'lucide-react';
+import ImageUploadButton from '@/components/shared/ImageUploadButton';
+
+interface MessageContent {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}
 
 interface Message {
   id?: string;
   role: 'user' | 'assistant';
-  content: string;
+  content: string | MessageContent[];
 }
 
 interface Conversation {
@@ -44,6 +52,7 @@ export default function AIAssistant() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -144,8 +153,22 @@ export default function AIAssistant() {
     ));
   }
 
+  // Helper to get display text from message content
+  const getMessageText = (content: string | MessageContent[]): string => {
+    if (typeof content === 'string') return content;
+    const textPart = content.find(c => c.type === 'text');
+    return textPart?.text || '';
+  };
+
+  // Helper to check if message has image
+  const getMessageImage = (content: string | MessageContent[]): string | null => {
+    if (typeof content === 'string') return null;
+    const imagePart = content.find(c => c.type === 'image_url');
+    return imagePart?.image_url?.url || null;
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || !session) return;
+    if ((!input.trim() && !selectedImage) || !session) return;
 
     const userMessage = input.trim();
     setInput('');
@@ -157,21 +180,43 @@ export default function AIAssistant() {
       if (!conversationId) return;
     }
 
-    const newMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
+    // Build message content
+    let messageContent: string | MessageContent[];
+    if (selectedImage) {
+      messageContent = [];
+      if (userMessage) {
+        messageContent.push({ type: 'text', text: userMessage });
+      }
+      messageContent.push({ type: 'image_url', image_url: { url: selectedImage } });
+    } else {
+      messageContent = userMessage;
+    }
+
+    const newMessages: Message[] = [...messages, { role: 'user', content: messageContent }];
     setMessages(newMessages);
+    setSelectedImage(null);
     setLoading(true);
 
-    // Save user message
-    await saveMessage(conversationId, 'user', userMessage);
+    // Save user message (store as text for DB)
+    const saveContent = typeof messageContent === 'string' 
+      ? messageContent 
+      : (messageContent.find(c => c.type === 'text')?.text || '[Image]');
+    await saveMessage(conversationId, 'user', saveContent);
 
     // Update title if first message
     if (messages.length === 0) {
-      await updateConversationTitle(conversationId, userMessage);
+      await updateConversationTitle(conversationId, saveContent);
     }
 
     let assistantContent = '';
 
     try {
+      // Format messages for API
+      const apiMessages = newMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
         {
@@ -181,7 +226,7 @@ export default function AIAssistant() {
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            messages: newMessages,
+            messages: apiMessages,
             userContext: profile ? {
               dietaryRestrictions: profile.dietary_restrictions,
               allergies: profile.allergies,
@@ -253,6 +298,7 @@ export default function AIAssistant() {
   const startNewChat = () => {
     setCurrentConversationId(null);
     setMessages([]);
+    setSelectedImage(null);
     setSidebarOpen(false);
   };
 
@@ -379,21 +425,33 @@ export default function AIAssistant() {
                   Start a conversation
                 </h2>
                 <p className="text-muted-foreground text-center max-w-md">
-                  Ask me anything about nutrition, diet plans, exercise routines, or healthy recipes!
+                  Ask me anything about nutrition, diet plans, exercise routines, or healthy recipes! You can also share food photos for analysis.
                 </p>
               </div>
             ) : (
-              messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                  <div className={`max-w-[85%] p-4 rounded-2xl ${
-                    m.role === 'user' 
-                      ? 'bg-primary text-primary-foreground rounded-tr-sm' 
-                      : 'bg-card border border-border rounded-tl-sm'
-                  }`}>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+              messages.map((m, i) => {
+                const text = getMessageText(m.content);
+                const image = getMessageImage(m.content);
+                
+                return (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                    <div className={`max-w-[85%] p-4 rounded-2xl ${
+                      m.role === 'user' 
+                        ? 'bg-primary text-primary-foreground rounded-tr-sm' 
+                        : 'bg-card border border-border rounded-tl-sm'
+                    }`}>
+                      {image && (
+                        <img 
+                          src={image} 
+                          alt="Uploaded" 
+                          className="max-w-[200px] rounded-lg mb-2"
+                        />
+                      )}
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             {loading && !messages.find(m => m.role === 'assistant' && messages.indexOf(m) === messages.length - 1) && (
               <div className="flex justify-start animate-fade-in">
@@ -416,8 +474,30 @@ export default function AIAssistant() {
             </p>
           </div>
 
+          {/* Image Preview */}
+          {selectedImage && (
+            <div className="mb-2 flex items-center gap-2">
+              <img src={selectedImage} alt="Selected" className="w-16 h-16 rounded-lg object-cover" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedImage(null)}
+                className="text-muted-foreground"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Remove
+              </Button>
+            </div>
+          )}
+
           {/* Input */}
           <div className="flex gap-2 shrink-0">
+            <ImageUploadButton
+              selectedImage={null}
+              onImageSelect={setSelectedImage}
+              onImageClear={() => setSelectedImage(null)}
+              disabled={loading}
+            />
             <Input 
               value={input} 
               onChange={(e) => setInput(e.target.value)}
@@ -426,7 +506,7 @@ export default function AIAssistant() {
               className="flex-1" 
               disabled={loading} 
             />
-            <Button onClick={handleSend} disabled={!input.trim() || loading}>
+            <Button onClick={handleSend} disabled={(!input.trim() && !selectedImage) || loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>

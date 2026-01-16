@@ -24,10 +24,10 @@ serve(async (req) => {
   }
 
   try {
-    const { description, defaultMealType } = await req.json();
+    const { description, defaultMealType, image } = await req.json();
 
-    if (!description || typeof description !== "string") {
-      return new Response(JSON.stringify({ error: "Description is required" }), {
+    if (!description && !image) {
+      return new Response(JSON.stringify({ error: "Description or image is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -83,6 +83,7 @@ serve(async (req) => {
     let apiKey = Deno.env.get("LOVABLE_API_KEY");
     let model = "google/gemini-3-flash-preview";
 
+    // For image support, use vision-capable model
     if (openaiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = openaiKey;
@@ -95,16 +96,19 @@ serve(async (req) => {
       apiUrl = customEndpoint;
       apiKey = customApiKey;
       model = "gpt-4o-mini";
+    } else if (image) {
+      // For Lovable AI with images, use gemini which supports vision
+      model = "google/gemini-2.5-flash";
     }
 
     if (!apiKey) {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Parsing food with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}`);
+    console.log(`Parsing food with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, hasImage: ${!!image}`);
 
     const systemPrompt = `You are a nutrition data extraction AI specializing in Bangladeshi cuisine. 
-Parse the user's food description and extract individual food items with nutritional estimates.
+Parse the user's food description (or analyze the food image) and extract individual food items with nutritional estimates.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text.
 
@@ -144,6 +148,17 @@ Return format (pure JSON array):
   }
 ]`;
 
+    // Build the user message content
+    let userContent: any;
+    if (image) {
+      userContent = [
+        { type: "text", text: `${description ? `Parse this food description: "${description}"` : 'Analyze this food image and identify the foods shown.'}${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}` },
+        { type: "image_url", image_url: { url: image } }
+      ];
+    } else {
+      userContent = `Parse this food description: "${description}"${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}`;
+    }
+
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -154,7 +169,7 @@ Return format (pure JSON array):
         model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Parse this food description: "${description}"${defaultMealType ? ` (Default meal type: ${defaultMealType})` : ""}` },
+          { role: "user", content: userContent },
         ],
       }),
     });

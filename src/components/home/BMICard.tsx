@@ -28,7 +28,7 @@ interface BilingualTip {
   date: string;
 }
 
-const CACHE_KEY = 'bmi_daily_tip_bilingual';
+const CACHE_KEY = 'bmi_suggestion_bilingual';
 
 function getCachedTip(userId: string): BilingualTip | null {
   try {
@@ -77,7 +77,7 @@ export default function BMICard() {
       if (cachedTip) {
         setBilingualTip(cachedTip);
       } else {
-        fetchDailyTip(data);
+        fetchBMISuggestion(data);
       }
     }
   }
@@ -95,7 +95,7 @@ export default function BMICard() {
     return { label: language === 'bn' ? 'স্থূলতা' : 'Obese', color: 'bg-terracotta/20 text-terracotta' };
   };
 
-  async function fetchDailyTip(profileData?: Profile, forceRefresh = false) {
+  async function fetchBMISuggestion(profileData?: Profile, forceRefresh = false) {
     if (!session || !user) return;
     
     const data = profileData || profile;
@@ -116,7 +116,25 @@ export default function BMICard() {
       const bmi = data.height_cm && data.weight_kg 
         ? data.weight_kg / Math.pow(data.height_cm / 100, 2)
         : null;
-      const categoryLabel = bmi && bmi < 18.5 ? 'Underweight' : bmi && bmi < 25 ? 'Normal' : bmi && bmi < 30 ? 'Overweight' : 'Obese';
+      
+      let categoryLabel = 'Normal';
+      let recommendation = '';
+      
+      if (bmi) {
+        if (bmi < 18.5) {
+          categoryLabel = 'Underweight';
+          recommendation = 'increase calorie intake with nutritious foods';
+        } else if (bmi < 25) {
+          categoryLabel = 'Normal';
+          recommendation = 'maintain your healthy weight';
+        } else if (bmi < 30) {
+          categoryLabel = 'Overweight';
+          recommendation = 'reduce calorie intake and increase activity';
+        } else {
+          categoryLabel = 'Obese';
+          recommendation = 'focus on portion control and regular exercise';
+        }
+      }
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
@@ -129,17 +147,20 @@ export default function BMICard() {
           body: JSON.stringify({
             messages: [{
               role: 'user',
-              content: `Give me ONE short, actionable daily food tip for Bangladesh (max 25 words, 3 lines) based on:
-- BMI: ${bmi?.toFixed(1)} (${categoryLabel})
-- Goal: ${data.fitness_goal || 'general health'}
+              content: `Based on BMI ${bmi?.toFixed(1)} (${categoryLabel}), give ONE specific dietary suggestion to help ${recommendation}.
+
+Requirements:
+- Max 25 words per language (3 short lines)
+- Include ONE specific Bengali food example
+- Be actionable and practical
 
 Provide BOTH English and Bangla versions in this exact format:
 [ENGLISH]
-Your tip in English here
+Your suggestion here with a Bengali food example
 [BANGLA]
-আপনার বাংলা টিপ এখানে
+আপনার বাংলা পরামর্শ এখানে বাঙালি খাবারের উদাহরণ সহ
 
-Just the tips, no extra text.`
+Just the suggestions, no extra text.`
             }],
           }),
         }
@@ -190,8 +211,8 @@ Just the tips, no extra text.`
         setCachedTip(user.id, tipData);
       }
     } catch (error) {
-      console.error('Error getting tip:', error);
-      toast.error('Failed to get food tip');
+      console.error('Error getting suggestion:', error);
+      toast.error('Failed to get BMI suggestion');
     } finally {
       setLoadingTip(false);
     }
@@ -271,19 +292,19 @@ Just the tips, no extra text.`
           <span>40</span>
         </div>
 
-        {/* Daily Food Tip - Bilingual */}
+        {/* BMI Suggestion - Bilingual */}
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-golden" />
               <span className="text-sm font-medium text-foreground">
-                {t('home.dailyTip')}
+                {language === 'bn' ? 'BMI পরামর্শ' : 'BMI Suggestion'}
               </span>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => fetchDailyTip(undefined, true)}
+              onClick={() => fetchBMISuggestion(undefined, true)}
               disabled={loadingTip}
               className="h-7 w-7"
             >
@@ -298,13 +319,13 @@ Just the tips, no extra text.`
             {loadingTip && !displayTip ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                {language === 'bn' ? 'টিপ লোড হচ্ছে...' : 'Getting your tip...'}
+                {language === 'bn' ? 'পরামর্শ লোড হচ্ছে...' : 'Getting your suggestion...'}
               </div>
             ) : (
               <p className="text-sm text-foreground line-clamp-3">
                 {displayTip || (language === 'bn' 
-                  ? 'রিফ্রেশ করে টিপ পান!' 
-                  : 'Click refresh to get a personalized food tip!')}
+                  ? 'রিফ্রেশ করে পরামর্শ পান!' 
+                  : 'Click refresh to get a personalized BMI suggestion!')}
               </p>
             )}
           </div>
