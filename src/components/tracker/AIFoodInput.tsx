@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import ImageUploadButton from '@/components/shared/ImageUploadButton';
 
 interface ParsedFood {
   food_name: string;
@@ -47,6 +48,7 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
   const [showParsed, setShowParsed] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const mealTypes = [
     { id: 'breakfast', label: t('tracker.breakfast'), icon: Coffee },
@@ -56,7 +58,7 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
   ];
 
   const handleParse = async () => {
-    if (!description.trim() || !session) return;
+    if ((!description.trim() && !selectedImage) || !session) return;
 
     setParsing(true);
     setParsedFoods([]);
@@ -73,6 +75,7 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
           body: JSON.stringify({
             description: description.trim(),
             defaultMealType: selectedMealType || null,
+            image: selectedImage,
           }),
         }
       );
@@ -153,6 +156,7 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
 
       toast.success(`Added ${selectedFoods.length} food item${selectedFoods.length > 1 ? 's' : ''}`);
       setDescription('');
+      setSelectedImage(null);
       setParsedFoods([]);
       setShowParsed(false);
       setSelectedMealType('');
@@ -177,6 +181,8 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
     .filter((f) => f.selected)
     .reduce((sum, f) => sum + f.calories, 0);
 
+  const canSubmit = (description.trim() || selectedImage) && selectedMealType;
+
   return (
     <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/5 to-primary/10">
       <CardContent className="p-4 space-y-4">
@@ -196,40 +202,56 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
         />
 
         {!showParsed && (
-          <div className="flex gap-2">
-            <Select value={selectedMealType} onValueChange={setSelectedMealType}>
-              <SelectTrigger className="w-[140px] bg-background/80">
-                <SelectValue placeholder="Meal type" />
-              </SelectTrigger>
-              <SelectContent>
-                {mealTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    <div className="flex items-center gap-2">
-                      <type.icon className="w-4 h-4" />
-                      {type.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-3">
+            <div className="flex gap-2 items-center">
+              <ImageUploadButton
+                selectedImage={selectedImage}
+                onImageSelect={setSelectedImage}
+                onImageClear={() => setSelectedImage(null)}
+                disabled={parsing || saving}
+              />
+              
+              <Select value={selectedMealType} onValueChange={setSelectedMealType}>
+                <SelectTrigger className="w-[140px] bg-background/80">
+                  <SelectValue placeholder="Meal type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mealTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      <div className="flex items-center gap-2">
+                        <type.icon className="w-4 h-4" />
+                        {type.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Button
-              onClick={handleParse}
-              disabled={!description.trim() || parsing}
-              className="flex-1 gap-2"
-            >
-              {parsing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Add with AI
-                </>
-              )}
-            </Button>
+              <Button
+                onClick={handleParse}
+                disabled={!canSubmit || parsing}
+                className="flex-1 gap-2"
+              >
+                {parsing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Add with AI
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {/* Hint when meal type not selected */}
+            {!selectedMealType && (description.trim() || selectedImage) && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="text-golden">↑</span> Select a meal type to continue
+              </p>
+            )}
           </div>
         )}
 
@@ -320,6 +342,7 @@ export default function AIFoodInput({ onFoodAdded }: AIFoodInputProps) {
                   onClick={() => {
                     setParsedFoods([]);
                     setShowParsed(false);
+                    setSelectedImage(null);
                   }}
                 >
                   <X className="w-4 h-4 mr-1" />

@@ -80,7 +80,8 @@ Guidelines:
 - Be concise but helpful
 - When suggesting meals, mention approximate calories and macros
 - Reference local markets and affordable options in BDT when relevant
-- Consider Bangladesh climate for exercise recommendations`;
+- Consider Bangladesh climate for exercise recommendations
+- If an image is provided, analyze it for food/exercise content and provide relevant advice`;
 
     // Check for OpenAI API key in secrets first (priority)
     const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
@@ -90,10 +91,16 @@ Guidelines:
     let model = "google/gemini-3-flash-preview";
 
     // Priority: OpenAI secret key > User's custom key > Lovable AI
+    // For image support, we need to use gpt-4o-mini or similar vision model
+    const hasImage = messages.some((m: any) => {
+      if (typeof m.content === 'string') return false;
+      return Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url');
+    });
+
     if (openaiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = openaiKey;
-      model = "gpt-4o-mini";
+      model = "gpt-4o-mini"; // Vision-capable model
     } else if (aiProvider === "openai" && customApiKey) {
       apiUrl = "https://api.openai.com/v1/chat/completions";
       apiKey = customApiKey;
@@ -102,13 +109,16 @@ Guidelines:
       apiUrl = customEndpoint;
       apiKey = customApiKey;
       model = "gpt-4o-mini";
+    } else if (hasImage) {
+      // For Lovable AI with images, use gemini which supports vision
+      model = "google/gemini-2.5-flash";
     }
 
     if (!apiKey) {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Using AI provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, model: ${model}`);
+    console.log(`Using AI provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, model: ${model}, hasImage: ${hasImage}`);
 
     const response = await fetch(apiUrl, {
       method: "POST",

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 import { 
   Sparkles, 
   Loader2, 
@@ -16,8 +18,10 @@ import {
   Heart,
   Activity,
   Trophy,
-  ChevronUp
+  ChevronUp,
+  ImagePlus
 } from 'lucide-react';
+import ImageUploadButton from '@/components/shared/ImageUploadButton';
 
 interface ParsedExercise {
   exercise_name: string;
@@ -41,6 +45,7 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
   const [parsedExercises, setParsedExercises] = useState<ParsedExercise[]>([]);
   const [showParsed, setShowParsed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -61,7 +66,7 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
   };
 
   const handleParse = async () => {
-    if (!description.trim() || !session) return;
+    if ((!description.trim() && !selectedImage) || !session) return;
 
     setParsing(true);
     setParsedExercises([]);
@@ -77,6 +82,7 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
           },
           body: JSON.stringify({
             description: description.trim(),
+            image: selectedImage,
           }),
         }
       );
@@ -113,6 +119,84 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
     }
   };
 
+  // Function to sync logged exercises with today's workout plan
+  const syncWithWorkoutPlan = async (exercises: ParsedExercise[]) => {
+    if (!user) return;
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Fetch today's workout plan
+    const { data: plan } = await supabase
+      .from('workout_plans')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('plan_date', today)
+      .maybeSingle();
+
+    if (!plan || !plan.workouts) return;
+
+    const workouts = plan.workouts as Array<{
+      id?: string;
+      name: string;
+      name_bn: string;
+      duration: number;
+      type: string;
+      checked: boolean;
+      completed_at: string | null;
+      planned_duration?: number;
+      completed_duration?: number;
+      completion_percentage?: number;
+    }>;
+
+    let updated = false;
+
+    // For each logged exercise, try to match with workout plan items
+    for (const exercise of exercises) {
+      const exerciseName = exercise.exercise_name.toLowerCase();
+      const exerciseDuration = exercise.duration_minutes;
+
+      // Find matching workout by name similarity
+      for (let i = 0; i < workouts.length; i++) {
+        const workout = workouts[i];
+        const workoutName = workout.name.toLowerCase();
+        const workoutNameBn = workout.name_bn.toLowerCase();
+
+        // Check for fuzzy match
+        const isMatch = 
+          workoutName.includes(exerciseName) ||
+          exerciseName.includes(workoutName) ||
+          workoutName.split(' ').some(word => exerciseName.includes(word)) ||
+          exerciseName.split(' ').some(word => workoutName.includes(word));
+
+        if (isMatch && !workout.checked) {
+          const plannedDuration = workout.duration || workout.planned_duration || 0;
+          const previousCompleted = workout.completed_duration || 0;
+          const newCompleted = previousCompleted + exerciseDuration;
+          const percentage = plannedDuration > 0 ? Math.min(100, Math.round((newCompleted / plannedDuration) * 100)) : 100;
+
+          workouts[i] = {
+            ...workout,
+            planned_duration: plannedDuration,
+            completed_duration: newCompleted,
+            completion_percentage: percentage,
+            checked: newCompleted >= plannedDuration,
+            completed_at: newCompleted >= plannedDuration ? new Date().toISOString() : null,
+          };
+          updated = true;
+          break; // Move to next exercise
+        }
+      }
+    }
+
+    if (updated) {
+      // Save updated workout plan
+      await supabase
+        .from('workout_plans')
+        .update({ workouts: workouts as unknown as import('@/integrations/supabase/types').Json })
+        .eq('id', plan.id);
+    }
+  };
+
   const handleSave = async () => {
     if (!user) return;
 
@@ -139,8 +223,12 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
 
       if (error) throw error;
 
+      // Sync with workout plan
+      await syncWithWorkoutPlan(selectedExercises);
+
       toast.success(`Logged ${selectedExercises.length} exercise${selectedExercises.length > 1 ? 's' : ''}`);
       setDescription('');
+      setSelectedImage(null);
       setParsedExercises([]);
       setShowParsed(false);
       onExerciseAdded();
@@ -187,23 +275,32 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
         />
 
         {!showParsed && (
-          <Button
-            onClick={handleParse}
-            disabled={!description.trim() || parsing}
-            className="w-full gap-2"
-          >
-            {parsing ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Log with AI
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2 items-center">
+            <ImageUploadButton
+              selectedImage={selectedImage}
+              onImageSelect={setSelectedImage}
+              onImageClear={() => setSelectedImage(null)}
+              disabled={parsing || saving}
+            />
+            
+            <Button
+              onClick={handleParse}
+              disabled={(!description.trim() && !selectedImage) || parsing}
+              className="flex-1 gap-2"
+            >
+              {parsing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Log with AI
+                </>
+              )}
+            </Button>
+          </div>
         )}
 
         {/* Parsed Exercises Review */}
@@ -290,6 +387,7 @@ export default function AIExerciseInput({ onExerciseAdded }: AIExerciseInputProp
                   onClick={() => {
                     setParsedExercises([]);
                     setShowParsed(false);
+                    setSelectedImage(null);
                   }}
                 >
                   <X className="w-4 h-4 mr-1" />

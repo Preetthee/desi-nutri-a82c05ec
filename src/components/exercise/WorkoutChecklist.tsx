@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { 
   ClipboardList, 
@@ -27,6 +28,9 @@ interface Workout {
   type: string;
   checked: boolean;
   completed_at: string | null;
+  planned_duration?: number;
+  completed_duration?: number;
+  completion_percentage?: number;
 }
 
 interface BilingualMissed {
@@ -114,11 +118,29 @@ export default function WorkoutChecklist() {
     if (!plan || !user) return;
 
     const updatedWorkouts = [...plan.workouts];
-    updatedWorkouts[index] = {
-      ...updatedWorkouts[index],
-      checked: !updatedWorkouts[index].checked,
-      completed_at: !updatedWorkouts[index].checked ? new Date().toISOString() : null,
-    };
+    const workout = updatedWorkouts[index];
+    const plannedDuration = workout.duration || workout.planned_duration || 0;
+    
+    // If unchecking, reset completion
+    if (workout.checked) {
+      updatedWorkouts[index] = {
+        ...workout,
+        checked: false,
+        completed_at: null,
+        completed_duration: 0,
+        completion_percentage: 0,
+      };
+    } else {
+      // If checking, mark as fully complete
+      updatedWorkouts[index] = {
+        ...workout,
+        checked: true,
+        completed_at: new Date().toISOString(),
+        planned_duration: plannedDuration,
+        completed_duration: plannedDuration,
+        completion_percentage: 100,
+      };
+    }
 
     // Optimistic update
     setPlan({ ...plan, workouts: updatedWorkouts });
@@ -233,13 +255,20 @@ export default function WorkoutChecklist() {
           <div className="space-y-2">
             {plan.workouts.map((workout, index) => {
               const TypeIcon = getTypeIcon(workout.type);
+              const plannedDuration = workout.duration || workout.planned_duration || 0;
+              const completedDuration = workout.completed_duration || 0;
+              const completionPercentage = workout.completion_percentage || (workout.checked ? 100 : 0);
+              const isPartial = completionPercentage > 0 && completionPercentage < 100;
+              
               return (
                 <div
                   key={index}
                   className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
                     workout.checked 
                       ? 'bg-primary/10 border border-primary/20' 
-                      : 'bg-muted/50 hover:bg-muted'
+                      : isPartial
+                        ? 'bg-golden/10 border border-golden/20'
+                        : 'bg-muted/50 hover:bg-muted'
                   }`}
                 >
                   <Checkbox
@@ -254,10 +283,23 @@ export default function WorkoutChecklist() {
                     <p className={`font-medium ${workout.checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {language === 'bn' ? workout.name_bn : workout.name}
                     </p>
+                    {/* Partial completion indicator */}
+                    {isPartial && (
+                      <div className="mt-1">
+                        <div className="flex items-center gap-2 text-xs text-golden">
+                          <span>{completedDuration}/{plannedDuration} {t('common.min')}</span>
+                          <span>({completionPercentage}%)</span>
+                        </div>
+                        <Progress 
+                          value={completionPercentage} 
+                          className="h-1.5 mt-1 bg-golden/20"
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Timer className="w-3 h-3" />
-                    {workout.duration} {t('common.min')}
+                    {plannedDuration} {t('common.min')}
                   </div>
                 </div>
               );
