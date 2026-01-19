@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,78 +66,16 @@ serve(async (req) => {
       }
     }
 
-    // Get user's AI provider settings
-    const authHeader = req.headers.get("authorization");
-    let aiProvider = "lovable_ai";
-    let customApiKey: string | null = null;
-    let customEndpoint: string | null = null;
-
-    if (authHeader) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      const token = authHeader.replace("Bearer ", "");
-      const {
-        data: { user },
-      } = await supabase.auth.getUser(token);
-
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("ai_provider, custom_api_endpoint")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (profile) {
-          aiProvider = profile.ai_provider || "lovable_ai";
-          customEndpoint = profile.custom_api_endpoint;
-
-          // Get API key from vault using secure function
-          if (aiProvider === "openai" || aiProvider === "custom") {
-            const { data: vaultKey, error: vaultError } = await supabase.rpc("get_user_api_key", {
-              p_user_id: user.id,
-              p_provider: aiProvider,
-            });
-
-            if (vaultError) {
-              console.error("Error retrieving API key from vault:", vaultError);
-            } else {
-              customApiKey = vaultKey;
-            }
-          }
-        }
-      }
-    }
-
-    // Check for OpenAI API key in secrets first (priority)
-    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
-
-    let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-    let apiKey = Deno.env.get("LOVABLE_API_KEY");
-    let model = "google/gemini-3-flash-preview";
-
-    // For image support, use vision-capable model
-    if (openaiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = openaiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "openai" && customApiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "custom" && customApiKey && customEndpoint) {
-      apiUrl = customEndpoint;
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    } else if (image) {
-      // Lovable AI with images (Gemini)
-      model = "google/gemini-2.5-flash";
-    }
+    // Use Lovable AI exclusively
+    const apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const model = image ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview";
 
     if (!apiKey) {
       throw new Error("AI API key is not configured");
     }
+
+    console.log(`Parse food using Lovable AI, model: ${model}, hasImage: ${!!image}`);
 
     const systemPrompt = `You are a nutrition data extraction AI specializing in Bangladeshi cuisine. 
 Parse the user's food description (or analyze the food image) and extract individual food items with nutritional estimates.

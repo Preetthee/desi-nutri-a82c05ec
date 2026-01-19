@@ -8,9 +8,6 @@ import { toast } from 'sonner';
 import { Sparkles, Loader2, Check, ImageIcon, Zap } from 'lucide-react';
 
 interface AIProviderSettingsProps {
-  currentProvider: string;
-  customApiKey: string | null;
-  customEndpoint: string | null;
   onSaved: () => void;
 }
 
@@ -79,10 +76,10 @@ export default function AIProviderSettings({ onSaved }: AIProviderSettingsProps)
 
       try { reader.cancel(); } catch {}
 
-      setActiveModel(model || 'Unknown');
+      setActiveModel(model || 'Lovable AI');
     } catch (e) {
       console.error(e);
-      setActiveModel('Unknown');
+      setActiveModel('Lovable AI');
     } finally {
       setDetecting(false);
     }
@@ -124,7 +121,6 @@ export default function AIProviderSettings({ onSaved }: AIProviderSettingsProps)
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
-      // Public JPG that reliably works for OpenAI vision parsing
       const testImageUrl = 'https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg';
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
@@ -174,7 +170,7 @@ export default function AIProviderSettings({ onSaved }: AIProviderSettingsProps)
         <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
           <Zap className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium">
-            {language === 'bn' ? 'সক্রিয় মডেল:' : 'Active model:'}
+            {language === 'bn' ? 'পাওয়ার্ড বাই:' : 'Powered by:'}
           </span>
           {detecting ? (
             <span className="text-sm text-muted-foreground flex items-center gap-2">
@@ -183,7 +179,7 @@ export default function AIProviderSettings({ onSaved }: AIProviderSettingsProps)
             </span>
           ) : (
             <Badge variant="secondary" className="bg-primary/20 text-primary">
-              {activeModel || 'Unknown'}
+              {activeModel || 'Lovable AI'}
             </Badge>
           )}
         </div>

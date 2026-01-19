@@ -5,17 +5,16 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
 import AIProviderSettings from '@/components/settings/AIProviderSettings';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { 
-  Settings as SettingsIcon, 
   Globe, 
   User, 
   Bell,
@@ -23,9 +22,7 @@ import {
   HelpCircle,
   LogOut,
   ChevronRight,
-  Loader2,
-  Camera,
-  Trash2
+  Loader2
 } from 'lucide-react';
 
 interface Profile {
@@ -40,8 +37,6 @@ interface Profile {
   allergies: string[] | null;
   disliked_foods: string[] | null;
   avatar_url: string | null;
-  ai_provider: string | null;
-  custom_api_endpoint: string | null;
 }
 
 export default function Settings() {
@@ -70,7 +65,7 @@ export default function Settings() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('full_name, age, height_cm, weight_kg, gender, fitness_goal, health_conditions, dietary_restrictions, allergies, disliked_foods, avatar_url')
       .eq('user_id', user.id)
       .single();
 
@@ -251,12 +246,7 @@ export default function Settings() {
         {/* AI Provider Settings */}
         <div className="animate-slide-up" style={{ animationDelay: '300ms' }}>
           <h3 className="text-sm font-medium text-muted-foreground mb-2 px-1">AI Configuration</h3>
-          <AIProviderSettings
-            currentProvider={profile?.ai_provider || 'lovable_ai'}
-            customApiKey={null}
-            customEndpoint={profile?.custom_api_endpoint || null}
-            onSaved={fetchProfile}
-          />
+          <AIProviderSettings onSaved={fetchProfile} />
         </div>
 
         {/* Logout Button */}

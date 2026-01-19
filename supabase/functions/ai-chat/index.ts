@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +16,6 @@ function validateImageUrl(url: string): { ok: true } | { ok: false; error: strin
     return { ok: true };
   }
 
-  // data URL support
   const m = url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
   if (!m) {
     return { ok: false, error: "Unsupported image format. Please upload JPG/PNG/WEBP/GIF." };
@@ -66,53 +64,6 @@ serve(async (req) => {
       }
     }
 
-    // Get user's AI provider settings if authorization is provided
-    const authHeader = req.headers.get("authorization");
-    let aiProvider = "lovable_ai";
-    let customApiKey: string | null = null;
-    let customEndpoint: string | null = null;
-
-    if (authHeader) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      const token = authHeader.replace("Bearer ", "");
-      const {
-        data: { user },
-      } = await supabase.auth.getUser(token);
-
-      if (user) {
-        // Get profile for provider selection and endpoint
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select(
-            "ai_provider, custom_api_endpoint, dietary_restrictions, allergies, fitness_goal, health_conditions"
-          )
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (profile) {
-          aiProvider = profile.ai_provider || "lovable_ai";
-          customEndpoint = profile.custom_api_endpoint;
-
-          // Get API key from vault using secure function (for openai or custom providers)
-          if (aiProvider === "openai" || aiProvider === "custom") {
-            const { data: vaultKey, error: vaultError } = await supabase.rpc("get_user_api_key", {
-              p_user_id: user.id,
-              p_provider: aiProvider,
-            });
-
-            if (vaultError) {
-              console.error("Error retrieving API key from vault:", vaultError);
-            } else {
-              customApiKey = vaultKey;
-            }
-          }
-        }
-      }
-    }
-
     // Build system prompt with user context - Bangladesh focused
     const systemPrompt = `You are Desi Nutri AI, a friendly and knowledgeable nutrition and fitness assistant specializing in Bangladeshi cuisine and lifestyle.
 
@@ -141,36 +92,17 @@ Guidelines:
 - Consider Bangladesh climate for exercise recommendations
 - If an image is provided, analyze it and respond based on what you see.`;
 
-    // Check for OpenAI API key in secrets first (priority)
-    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
-
-    let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-    let apiKey = Deno.env.get("LOVABLE_API_KEY");
-    let model = "google/gemini-3-flash-preview";
-
+    // Use Lovable AI exclusively
+    const apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
     const hasImage = imageUrls.length > 0;
-
-    // Priority: OpenAI secret key > User's custom key > Lovable AI
-    if (openaiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = openaiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "openai" && customApiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "custom" && customApiKey && customEndpoint) {
-      apiUrl = customEndpoint;
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    } else if (hasImage) {
-      // Lovable AI with images (Gemini)
-      model = "google/gemini-2.5-flash";
-    }
+    const model = hasImage ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview";
 
     if (!apiKey) {
       throw new Error("AI API key is not configured");
     }
+
+    console.log(`AI Chat using Lovable AI, model: ${model}, hasImage: ${hasImage}`);
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -186,7 +118,6 @@ Guidelines:
     });
 
     if (!response.ok) {
-      // Map rate limit / credits consistently
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
@@ -203,7 +134,6 @@ Guidelines:
       const errorText = await response.text();
       console.error("AI provider error:", response.status, errorText);
 
-      // Try to surface a friendly image error
       let friendly = "AI request failed.";
       try {
         const parsed = JSON.parse(errorText);

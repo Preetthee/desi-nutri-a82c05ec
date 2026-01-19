@@ -30,11 +30,8 @@ serve(async (req) => {
       });
     }
 
-    // Get user's AI provider settings
+    // Get user's weight from profile if auth header is provided
     const authHeader = req.headers.get("authorization");
-    let aiProvider = "lovable_ai";
-    let customApiKey = null;
-    let customEndpoint = null;
     let weightKg = userWeight || 70;
 
     if (authHeader) {
@@ -48,59 +45,26 @@ serve(async (req) => {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("ai_provider, custom_api_endpoint, weight_kg")
+          .select("weight_kg")
           .eq("user_id", user.id)
           .maybeSingle();
         
-        if (profile) {
-          aiProvider = profile.ai_provider || "lovable_ai";
-          customEndpoint = profile.custom_api_endpoint;
-          if (profile.weight_kg) weightKg = profile.weight_kg;
-          
-          // Get API key from vault using secure function
-          if (aiProvider === "openai" || aiProvider === "custom") {
-            const { data: vaultKey, error: vaultError } = await supabase
-              .rpc("get_user_api_key", { 
-                p_user_id: user.id, 
-                p_provider: aiProvider 
-              });
-            
-            if (vaultError) {
-              console.error("Error retrieving API key from vault:", vaultError);
-            } else {
-              customApiKey = vaultKey;
-            }
-          }
+        if (profile?.weight_kg) {
+          weightKg = profile.weight_kg;
         }
       }
     }
 
-    // Check for OpenAI API key in secrets first (priority)
-    const openaiKey = Deno.env.get("OPEN_AI_API_KEY");
-    
-    let apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-    let apiKey = Deno.env.get("LOVABLE_API_KEY");
-    let model = "google/gemini-3-flash-preview";
-
-    if (openaiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = openaiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "openai" && customApiKey) {
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    } else if (aiProvider === "custom" && customApiKey && customEndpoint) {
-      apiUrl = customEndpoint;
-      apiKey = customApiKey;
-      model = "gpt-4o-mini";
-    }
+    // Use Lovable AI exclusively
+    const apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const model = "google/gemini-3-flash-preview";
 
     if (!apiKey) {
       throw new Error("AI API key is not configured");
     }
 
-    console.log(`Parsing exercise with provider: ${openaiKey ? 'OpenAI (secret)' : aiProvider}, user weight: ${weightKg}kg`);
+    console.log(`Parse exercise using Lovable AI, model: ${model}, user weight: ${weightKg}kg`);
 
     const systemPrompt = `You are a fitness data extraction AI for Bangladesh users. Parse the user's exercise description and extract individual exercises with estimates.
 
