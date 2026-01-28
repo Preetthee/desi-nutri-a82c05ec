@@ -9,6 +9,9 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  linkGoogleAccount: () => Promise<{ error: Error | null }>;
+  getLinkedIdentities: () => { provider: string; identity_id: string }[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,8 +71,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+    return { error: error as Error | null };
+  };
+
+  const linkGoogleAccount = async () => {
+    const { error } = await supabase.auth.linkIdentity({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/settings`,
+      },
+    });
+    return { error: error as Error | null };
+  };
+
+  const getLinkedIdentities = () => {
+    return (user?.identities || []).map(identity => ({
+      provider: identity.provider,
+      identity_id: identity.identity_id || identity.id,
+    }));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      loading, 
+      signUp, 
+      signIn, 
+      signOut, 
+      signInWithGoogle, 
+      linkGoogleAccount, 
+      getLinkedIdentities 
+    }}>
       {children}
     </AuthContext.Provider>
   );
