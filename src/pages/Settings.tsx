@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/layout/AppLayout';
 import AIProviderSettings from '@/components/settings/AIProviderSettings';
+import AuthenticationSettings from '@/components/settings/AuthenticationSettings';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -249,12 +250,18 @@ export default function Settings() {
           <AIProviderSettings onSaved={fetchProfile} />
         </div>
 
+        {/* Authentication Settings */}
+        <div className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2 px-1">{t('settings.authentication')}</h3>
+          <AuthenticationSettings />
+        </div>
+
         {/* Logout Button */}
         <Button
           variant="outline"
           onClick={handleLogout}
           className="w-full justify-center gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 animate-slide-up"
-          style={{ animationDelay: '400ms' }}
+          style={{ animationDelay: '500ms' }}
         >
           <LogOut className="w-4 h-4" />
           {t('nav.logout')}

@@ -132,6 +132,14 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.help': 'Help & Support',
     'settings.privacy': 'Privacy Policy',
     'settings.deleteAccount': 'Delete Account',
+    'settings.authentication': 'Authentication',
+    'settings.signInMethod': 'Sign-in Method',
+    'settings.linkedAccounts': 'Linked Accounts',
+    'settings.linkGoogle': 'Link Google',
+    'settings.linked': 'Linked',
+    'settings.linkAccount': 'Link your accounts for faster sign-in',
+    'settings.continueWithGoogle': 'Continue with Google',
+    'settings.or': 'or',
     
     // Profile
     'profile.title': 'Profile',
@@ -306,6 +314,14 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.help': 'সাহায্য ও সমর্থন',
     'settings.privacy': 'গোপনীয়তা নীতি',
     'settings.deleteAccount': 'অ্যাকাউন্ট মুছুন',
+    'settings.authentication': 'প্রমাণীকরণ',
+    'settings.signInMethod': 'সাইন-ইন পদ্ধতি',
+    'settings.linkedAccounts': 'সংযুক্ত অ্যাকাউন্ট',
+    'settings.linkGoogle': 'গুগল সংযুক্ত করুন',
+    'settings.linked': 'সংযুক্ত',
+    'settings.linkAccount': 'দ্রুত সাইন-ইনের জন্য আপনার অ্যাকাউন্ট সংযুক্ত করুন',
+    'settings.continueWithGoogle': 'গুগল দিয়ে চালিয়ে যান',
+    'settings.or': 'অথবা',
     
     // Profile
     'profile.title': 'প্রোফাইল',
